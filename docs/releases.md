@@ -27,6 +27,27 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.17 - 2026-03-17
+
+### OpenClaw Connector
+
+#### Changed
+
+- refactored connector service activation into a separate helper module so
+  environment reads and network requests no longer live in the same source file
+- preserved connector runtime behavior while reducing noisy OpenClaw
+  install-time code-safety warnings about possible environment harvesting
+
+#### Operational impact
+
+- existing installs do not need to reconnect; this release is intended to make
+  trusted plugin installation and audit output less alarming
+- the packaged connector now ships an additional helper file,
+  `service-activation.ts`, and release artifacts should be updated as a unit
+- OpenChat deployments that serve the stable connector download URL should bump
+  their local connector package version before deployment so the hosted redirect
+  advances to this release
+
 ## 0.1.16 - 2026-03-17
 
 ### OpenClaw Connector

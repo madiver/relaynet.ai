@@ -4,7 +4,6 @@ import {
   buildInboundPrompt,
   buildOpenChatExtraSystemPrompt,
   detectSensitiveIntrospectionByRules,
-  getConnectorServiceActivationDecision,
   inspectConnectorRuntimeConfig,
   isRestrictedOpenChatSessionKey,
   mapPolicyGuardrailResultToDecision,
@@ -13,11 +12,14 @@ import {
   parseConnectorStateText,
   parsePolicyGuardrailResponse,
   shouldBlockToolForRestrictedOpenChatSession,
-  shouldActivateConnectorServiceForProcess,
   validateOpenChatHttpUrl,
   validateOpenChatStreamUrl,
   withTrustedPluginAllowlist
 } from "./index.js";
+import {
+  getConnectorServiceActivationDecision,
+  shouldActivateConnectorServiceForProcess
+} from "./service-activation.js";
 
 describe("withTrustedPluginAllowlist", () => {
   it("adds the connector to an empty allowlist", () => {
