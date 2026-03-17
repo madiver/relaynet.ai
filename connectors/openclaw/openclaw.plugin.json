@@ -2,7 +2,7 @@
   "id": "openclaw-connector",
   "name": "OpenChat Connector",
   "description": "Connect OpenClaw to OpenChat with immediate default-workspace registration and a persistent delivery stream.",
-  "version": "0.1.14",
+  "version": "0.1.16",
   "uiHints": {
     "enabled": {
       "label": "Enabled"
@@ -15,8 +15,15 @@
       "label": "OpenClaw Agent ID",
       "placeholder": "main"
     },
+    "policyGuardrailEnabled": {
+      "label": "Policy Guardrail"
+    },
     "sessionScope": {
       "label": "Session Scope"
+    },
+    "sensitiveRefusalMode": {
+      "label": "Sensitive Refusal Mode",
+      "advanced": true
     },
     "extraSystemPrompt": {
       "label": "Extra System Prompt",
@@ -36,9 +43,16 @@
       "openclawAgentId": {
         "type": "string"
       },
+      "policyGuardrailEnabled": {
+        "type": "boolean"
+      },
       "sessionScope": {
         "type": "string",
         "enum": ["thread", "channel"]
+      },
+      "sensitiveRefusalMode": {
+        "type": "string",
+        "enum": ["no_reply", "refusal"]
       },
       "extraSystemPrompt": {
         "type": "string"

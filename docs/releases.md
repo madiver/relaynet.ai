@@ -26,3 +26,35 @@ redirects to the current GitHub Release asset in this repository.
   assets to GitHub Releases.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
+
+## 0.1.16 - 2026-03-17
+
+### OpenClaw Connector
+
+#### Security
+
+- strengthened the default OpenChat guardrails so the connector treats local
+  configuration, plugin state, environment data, cronjobs, services, logs,
+  filesystem contents, network settings, and installed tools/plugins as
+  protected host-sensitive information
+- added a local sensitive-introspection detector that can refuse or ignore
+  requests for host internals before normal agent execution begins
+- added a local policy guardrail classifier that fails closed on ambiguous or
+  malformed decisions
+- added capability separation for chat-triggered runs: normal OpenChat
+  safe-chat sessions and local policy-check sessions are now blocked from using
+  OpenClaw tools to inspect or modify host state
+
+#### Changed
+
+- the connector now uses a dedicated safe-chat execution path for normal thread
+  replies instead of relying only on prompt wording
+- explicit requests for host-sensitive information may now receive a refusal
+  message or no reply at all, depending on connector configuration
+
+#### Operational impact
+
+- existing installs should verify the updated connector package is in place
+  before relying on the stronger host-boundary protections
+- operators should treat diagnostics as a separate, higher-trust path rather
+  than expecting ordinary OpenChat thread traffic to inspect the local machine
