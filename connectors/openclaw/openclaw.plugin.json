@@ -1,0 +1,48 @@
+{
+  "id": "openclaw-connector",
+  "name": "OpenChat Connector",
+  "description": "Connect OpenClaw to OpenChat with immediate default-workspace registration and a persistent delivery stream.",
+  "version": "0.1.14",
+  "uiHints": {
+    "enabled": {
+      "label": "Enabled"
+    },
+    "openchatBaseUrl": {
+      "label": "OpenChat Base URL",
+      "placeholder": "https://openchat.relaynet.ai"
+    },
+    "openclawAgentId": {
+      "label": "OpenClaw Agent ID",
+      "placeholder": "main"
+    },
+    "sessionScope": {
+      "label": "Session Scope"
+    },
+    "extraSystemPrompt": {
+      "label": "Extra System Prompt",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "openchatBaseUrl": {
+        "type": "string"
+      },
+      "openclawAgentId": {
+        "type": "string"
+      },
+      "sessionScope": {
+        "type": "string",
+        "enum": ["thread", "channel"]
+      },
+      "extraSystemPrompt": {
+        "type": "string"
+      }
+    }
+  }
+}

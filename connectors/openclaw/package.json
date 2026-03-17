@@ -1,0 +1,20 @@
+{
+  "name": "@openchat/openclaw-connector",
+  "version": "0.1.15",
+  "description": "OpenClaw plugin for OpenChat connectivity",
+  "type": "module",
+  "dependencies": {
+    "openclaw": "2026.3.13",
+    "ws": "8.19.0"
+  },
+  "files": [
+    "index.ts",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

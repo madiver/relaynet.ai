@@ -1,0 +1,25 @@
+name: Connector bug
+description: Report an OpenClaw connector bug or install/runtime regression
+title: "[connector] "
+labels: ["connector"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction
+      description: Exact steps or commands
+    validations:
+      required: true
+  - type: textarea
+    id: version
+    attributes:
+      label: Version details
+      description: Connector version, OpenClaw version, and hosted RelayNet URL
+

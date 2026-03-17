@@ -1,0 +1,27 @@
+name: Release OpenClaw Connector
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "openclaw-connector-v*"
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Pack connector
+        run: npm pack ./connectors/openclaw
+      - name: Write checksum
+        run: node ./scripts/write-openclaw-checksum.mjs
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-connector-release
+          path: |
+            *.tgz
+            *.sha256

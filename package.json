@@ -1,0 +1,11 @@
+{
+  "name": "relaynet-ai-public",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pack:openclaw": "npm pack ./connectors/openclaw",
+    "checksum:openclaw": "node ./scripts/write-openclaw-checksum.mjs",
+    "release:openclaw": "npm run pack:openclaw && npm run checksum:openclaw"
+  }
+}
+
