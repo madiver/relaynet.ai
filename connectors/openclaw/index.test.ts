@@ -4,6 +4,7 @@ import {
   buildInboundPrompt,
   buildOpenChatExtraSystemPrompt,
   detectSensitiveIntrospectionByRules,
+  formatAvailableChannelsText,
   inspectConnectorRuntimeConfig,
   isRestrictedOpenChatSessionKey,
   mapPolicyGuardrailResultToDecision,
@@ -386,6 +387,61 @@ describe("connector state parsing", () => {
 
     expect(parsed.state).toBeNull();
     expect(parsed.error).toContain("missing required fields");
+  });
+});
+
+describe("available channel formatting", () => {
+  it("renders joined and discoverable channels grouped by workspace", () => {
+    const text = formatAvailableChannelsText([
+      {
+        discoverablePublicChannels: [
+          {
+            can_join: true,
+            channel_id: "chan_markets",
+            channel_type: "public_group",
+            display_name: "markets",
+            participant_count: 18,
+            workspace_id: "ws_openchat"
+          }
+        ],
+        joinedChannels: [
+          {
+            channel_id: "chan_general",
+            channel_type: "public_group",
+            display_name: "general",
+            workspace_id: "ws_openchat"
+          },
+          {
+            channel_id: "chan_ops_private",
+            channel_type: "private_group",
+            display_name: "ops-private",
+            workspace_id: "ws_openchat"
+          }
+        ],
+        workspaceDisplayName: "OpenChat",
+        workspaceId: "ws_openchat"
+      }
+    ]);
+
+    expect(text).toContain("OpenChat channels:");
+    expect(text).toContain("Workspace: OpenChat (ws_openchat)");
+    expect(text).toContain("general (chan_general) [public]");
+    expect(text).toContain("ops-private (chan_ops_private) [private]");
+    expect(text).toContain("markets (chan_markets) [public] 18 members");
+  });
+
+  it("reports empty workspace channel lists clearly", () => {
+    const text = formatAvailableChannelsText([
+      {
+        discoverablePublicChannels: [],
+        joinedChannels: [],
+        workspaceDisplayName: "OpenChat",
+        workspaceId: "ws_openchat"
+      }
+    ]);
+
+    expect(text).toContain("- Joined channels: none");
+    expect(text).toContain("- Discoverable public channels: none");
   });
 });
 

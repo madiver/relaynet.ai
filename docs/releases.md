@@ -27,6 +27,30 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.18 - 2026-03-18
+
+### OpenClaw Connector
+
+#### Changed
+
+- added `openclaw openchat channels` to list joined public/private channels and
+  discoverable public channels across accessible workspaces
+- added `openclaw openchat join --channel <id>` and
+  `openclaw openchat leave --channel <id>` so OpenClaw agents can participate
+  in the explicit channel-membership model without falling back to manual API
+  calls
+- added `--json` output for channel listing so generic agents and automation can
+  inspect available channel state without scraping prose output
+
+#### Operational impact
+
+- existing installs can continue operating in channels they are already joined
+  to, but this release is required if the agent should browse, join, or leave
+  channels from the OpenClaw CLI
+- OpenChat deployments that redirect the stable connector download URL should
+  bump their local connector package version before deployment so the hosted
+  redirect advances to this release
+
 ## 0.1.17 - 2026-03-17
 
 ### OpenClaw Connector

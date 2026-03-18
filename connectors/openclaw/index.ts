@@ -88,6 +88,58 @@ type CurrentAgentStateResponse = {
   registration_status?: string;
 };
 
+type OpenChatChannelType = "direct_message" | "private_group" | "public_group";
+
+type OpenChatWorkspaceSummary = {
+  display_name: string;
+  workspace_id: string;
+};
+
+type OpenChatWorkspaceListResponse = {
+  workspaces: OpenChatWorkspaceSummary[];
+};
+
+type OpenChatChannelSummary = {
+  channel_id: string;
+  channel_type: OpenChatChannelType;
+  display_name: string;
+  human_participants_only?: boolean;
+  workspace_id: string;
+};
+
+type OpenChatChannelListResponse = {
+  channels: OpenChatChannelSummary[];
+};
+
+type OpenChatDiscoverableChannelSummary = {
+  can_join?: boolean;
+  can_leave?: boolean;
+  channel_id: string;
+  channel_type: OpenChatChannelType;
+  display_name: string;
+  human_participants_only?: boolean;
+  membership_state?: string | null;
+  participant_count?: number | null;
+  workspace_id: string;
+};
+
+type OpenChatDiscoverableChannelsResponse = {
+  channels: OpenChatDiscoverableChannelSummary[];
+};
+
+type OpenChatChannelMembershipResponse = {
+  channel_id: string;
+  membership_state: string;
+  status: "joined" | "left";
+};
+
+type WorkspaceChannelAvailability = {
+  discoverablePublicChannels: OpenChatDiscoverableChannelSummary[];
+  joinedChannels: OpenChatChannelSummary[];
+  workspaceDisplayName: string;
+  workspaceId: string;
+};
+
 type StreamFrame =
   | {
       next_sequence?: number;
@@ -1261,6 +1313,73 @@ async function refreshConnectorRegistrationState(
   }
 }
 
+async function fetchAccessibleWorkspaces(
+  state: ConnectorState
+): Promise<OpenChatWorkspaceSummary[]> {
+  const response = await requestJson<OpenChatWorkspaceListResponse>({
+    apiKey: state.apiKey,
+    url: `${state.apiBaseUrl}/workspaces`
+  });
+  return Array.isArray(response.workspaces) ? response.workspaces : [];
+}
+
+async function fetchJoinedWorkspaceChannels(
+  state: ConnectorState,
+  workspaceId: string
+): Promise<OpenChatChannelSummary[]> {
+  const response = await requestJson<OpenChatChannelListResponse>({
+    apiKey: state.apiKey,
+    url: `${state.apiBaseUrl}/workspaces/${encodeURIComponent(workspaceId)}/channels`
+  });
+  return (Array.isArray(response.channels) ? response.channels : []).filter(
+    (channel) =>
+      channel.channel_type === "public_group" || channel.channel_type === "private_group"
+  );
+}
+
+async function fetchDiscoverableWorkspaceChannels(
+  state: ConnectorState,
+  workspaceId: string
+): Promise<OpenChatDiscoverableChannelSummary[]> {
+  const response = await requestJson<OpenChatDiscoverableChannelsResponse>({
+    apiKey: state.apiKey,
+    url: `${state.apiBaseUrl}/workspaces/${encodeURIComponent(workspaceId)}/discoverable-channels`
+  });
+  return (Array.isArray(response.channels) ? response.channels : []).filter(
+    (channel) => channel.channel_type === "public_group"
+  );
+}
+
+async function listAvailableChannels(
+  state: ConnectorState,
+  workspaceId?: string | null
+): Promise<WorkspaceChannelAvailability[]> {
+  const workspaces = await fetchAccessibleWorkspaces(state);
+  const selectedWorkspaces = workspaceId
+    ? workspaces.filter((workspace) => workspace.workspace_id === workspaceId)
+    : workspaces;
+
+  if (workspaceId && selectedWorkspaces.length === 0) {
+    throw new Error(`Workspace ${workspaceId} is not accessible to this agent.`);
+  }
+
+  const availability: WorkspaceChannelAvailability[] = [];
+  for (const workspace of selectedWorkspaces) {
+    const [joinedChannels, discoverablePublicChannels] = await Promise.all([
+      fetchJoinedWorkspaceChannels(state, workspace.workspace_id),
+      fetchDiscoverableWorkspaceChannels(state, workspace.workspace_id)
+    ]);
+    availability.push({
+      discoverablePublicChannels,
+      joinedChannels,
+      workspaceDisplayName: workspace.display_name,
+      workspaceId: workspace.workspace_id
+    });
+  }
+
+  return availability;
+}
+
 function buildDefaultConnectorName(params: {
   connectorInstanceId: string;
   openclawAgentId: string;
@@ -1478,6 +1597,67 @@ function formatStatusText(state: ConnectorState | null): string {
     `- Last error at: ${state.lastErrorAt ?? "(none)"}`,
     `- Connected at: ${state.connectedAt}`
   ].join("\n");
+}
+
+function formatChannelType(channelType: OpenChatChannelType): string {
+  switch (channelType) {
+    case "public_group":
+      return "public";
+    case "private_group":
+      return "private";
+    case "direct_message":
+      return "direct";
+  }
+}
+
+function formatChannelLine(
+  channel: Pick<OpenChatChannelSummary, "channel_id" | "channel_type" | "display_name"> &
+    Partial<Pick<OpenChatDiscoverableChannelSummary, "membership_state" | "participant_count">>
+): string {
+  const parts = [
+    `${channel.display_name} (${channel.channel_id})`,
+    `[${formatChannelType(channel.channel_type)}]`
+  ];
+  if (typeof channel.participant_count === "number") {
+    parts.push(`${channel.participant_count} members`);
+  }
+  if (typeof channel.membership_state === "string" && channel.membership_state) {
+    parts.push(`state=${channel.membership_state}`);
+  }
+  return `  - ${parts.join(" ")}`;
+}
+
+export function formatAvailableChannelsText(
+  workspaces: WorkspaceChannelAvailability[]
+): string {
+  if (workspaces.length === 0) {
+    return "No accessible RelayNet workspaces were returned for this agent.";
+  }
+
+  const lines = ["OpenChat channels:"];
+  for (const workspace of workspaces) {
+    lines.push("", `Workspace: ${workspace.workspaceDisplayName} (${workspace.workspaceId})`);
+
+    if (workspace.joinedChannels.length === 0) {
+      lines.push("- Joined channels: none");
+    } else {
+      lines.push("- Joined channels:");
+      for (const channel of workspace.joinedChannels) {
+        lines.push(formatChannelLine(channel));
+      }
+    }
+
+    if (workspace.discoverablePublicChannels.length === 0) {
+      lines.push("- Discoverable public channels: none");
+    } else {
+      lines.push("- Discoverable public channels:");
+      for (const channel of workspace.discoverablePublicChannels) {
+        lines.push(formatChannelLine(channel));
+      }
+    }
+  }
+
+  return lines.join("\n");
 }
 
 export {
@@ -1883,6 +2063,105 @@ async function registerOpenChatCli(params: {
         return;
       }
       console.log(formatStatusText(refreshed.state));
+    });
+
+  openchat
+    .command("channels")
+    .description("List joined and discoverable OpenChat channels for this agent.")
+    .option("--workspace <id>", "Workspace id to inspect")
+    .option("--json", "Emit JSON instead of text")
+    .action(async (options: { json?: boolean; workspace?: string }) => {
+      await ensurePluginTrustedInOpenClawConfig(params.api);
+      const stateResult = await readConnectorStateDetailed(params.api);
+      if (stateResult.error && !stateResult.state) {
+        throw new Error(stateResult.error);
+      }
+      if (!stateResult.state) {
+        throw new Error("OpenChat connector is not connected.");
+      }
+
+      const refreshed = await refreshConnectorRegistrationState(params.api, stateResult.state);
+      const workspaces = await listAvailableChannels(
+        refreshed.state,
+        options.workspace?.trim() || null
+      );
+
+      if (options.json) {
+        console.log(JSON.stringify({ workspaces }, null, 2));
+        return;
+      }
+
+      const warningLines = refreshed.warning ? [`Refresh warning: ${refreshed.warning}`] : [];
+      const output = formatAvailableChannelsText(workspaces);
+      console.log(warningLines.length > 0 ? `${output}\n${warningLines.join("\n")}` : output);
+    });
+
+  openchat
+    .command("join")
+    .description("Join a discoverable public OpenChat channel by channel id.")
+    .option("--channel <id>", "Channel id to join")
+    .action(async (options: { channel?: string }) => {
+      await ensurePluginTrustedInOpenClawConfig(params.api);
+      const channelId = (options.channel ?? "").trim();
+      if (!channelId) {
+        throw new Error("Pass --channel <channel-id>.");
+      }
+
+      const stateResult = await readConnectorStateDetailed(params.api);
+      if (stateResult.error && !stateResult.state) {
+        throw new Error(stateResult.error);
+      }
+      if (!stateResult.state) {
+        throw new Error("OpenChat connector is not connected.");
+      }
+
+      const refreshed = await refreshConnectorRegistrationState(params.api, stateResult.state);
+      const response = await requestJson<OpenChatChannelMembershipResponse>({
+        apiKey: refreshed.state.apiKey,
+        method: "POST",
+        url: `${refreshed.state.apiBaseUrl}/channels/${encodeURIComponent(channelId)}/join`
+      });
+      console.log(
+        [
+          `Joined channel ${response.channel_id}.`,
+          `Membership state: ${response.membership_state}`,
+          "Use `openclaw openchat channels` to inspect the updated workspace channel list."
+        ].join("\n")
+      );
+    });
+
+  openchat
+    .command("leave")
+    .description("Leave a joined OpenChat channel by channel id.")
+    .option("--channel <id>", "Channel id to leave")
+    .action(async (options: { channel?: string }) => {
+      await ensurePluginTrustedInOpenClawConfig(params.api);
+      const channelId = (options.channel ?? "").trim();
+      if (!channelId) {
+        throw new Error("Pass --channel <channel-id>.");
+      }
+
+      const stateResult = await readConnectorStateDetailed(params.api);
+      if (stateResult.error && !stateResult.state) {
+        throw new Error(stateResult.error);
+      }
+      if (!stateResult.state) {
+        throw new Error("OpenChat connector is not connected.");
+      }
+
+      const refreshed = await refreshConnectorRegistrationState(params.api, stateResult.state);
+      const response = await requestJson<OpenChatChannelMembershipResponse>({
+        apiKey: refreshed.state.apiKey,
+        method: "POST",
+        url: `${refreshed.state.apiBaseUrl}/channels/${encodeURIComponent(channelId)}/leave`
+      });
+      console.log(
+        [
+          `Left channel ${response.channel_id}.`,
+          `Membership state: ${response.membership_state}`,
+          "Use `openclaw openchat channels` to inspect the updated workspace channel list."
+        ].join("\n")
+      );
     });
 
   openchat
