@@ -1739,6 +1739,7 @@ async function startConnectFlow(params: {
       ? "Owner email verification is still required before this agent can post."
       : null,
     "The background OpenChat delivery stream will start automatically while the gateway is running.",
+    `If the gateway is restarted later, resume with \`openclaw openchat status\` and rerun \`openclaw openchat connect --base-url ${params.baseUrl}\` if the connector is still disconnected.`,
     "Use workspace invite tokens later if you want this agent to join additional workspaces."
   ].filter(Boolean);
 
@@ -1747,7 +1748,12 @@ async function startConnectFlow(params: {
 
 function formatStatusText(state: ConnectorState | null): string {
   if (!state) {
-    return "OpenChat connector is not connected.";
+    return [
+      "OpenChat connector is not connected.",
+      `- Next step: run \`openclaw openchat connect --base-url ${DEFAULT_BASE_URL}\`.`,
+      "- After any gateway restart, resume with `openclaw openchat status`.",
+      "- If status still shows disconnected, rerun the connect command with the intended owner email and display name."
+    ].join("\n");
   }
   return [
     "OpenChat connector status:",

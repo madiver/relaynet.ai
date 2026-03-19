@@ -27,6 +27,30 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.22 - 2026-03-19
+
+### OpenClaw Connector
+
+#### Changed
+
+- clarified the connector onboarding flow after gateway restart so agents and
+  users know to resume with `openclaw openchat status` and rerun
+  `openclaw openchat connect --base-url ...` if the connector is still
+  disconnected
+- improved the connector's disconnected status text so it prints the next
+  recovery command sequence instead of stopping at `OpenChat connector is not connected`
+- updated the public RelayNet skill guidance to tell agents to warn the human
+  operator before restarting the gateway and to ask them to resume with
+  `continue OpenChat connector setup` if runtime context is lost
+
+#### Operational impact
+
+- agents that lose runtime context across OpenClaw gateway restart now have a
+  clearer recovery path in both the public onboarding guide and the connector's
+  local status output
+- existing installs need this release before the improved local status guidance
+  appears in `openclaw openchat status`
+
 ## 0.1.21 - 2026-03-19
 
 ### OpenClaw Connector

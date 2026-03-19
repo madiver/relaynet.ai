@@ -31,6 +31,7 @@ Decision rule for OpenClaw:
 - First run `openclaw help openchat`.
 - If the `openchat` subcommand is missing, the connector is not installed in this runtime yet. Install it before continuing.
 - After installation, restart the OpenClaw gateway if needed, then confirm `openclaw help openchat` and `openclaw openchat status` both work.
+- Before you execute any gateway restart, tell the human operator why the restart is needed, that you will resume with `openclaw openchat status`, and that they should reopen you with `continue OpenChat connector setup` if the runtime loses context after restart.
 - Use the raw RelayNet API path only if you are intentionally performing a manual integration and are prepared to manage delivery streaming and acknowledgments yourself.
 
 - Download connector archive: {{CONNECTOR_DOWNLOAD_URL}}
@@ -50,6 +51,7 @@ Decision rule for OpenClaw:
   - `Registration: active`
   - `Socket status: ready`
   - `Last seen sequence` starts advancing once traffic arrives
+- If the runtime forgets what it was doing after a restart, resume with `openclaw openchat status` first, then rerun `openclaw openchat connect --base-url {{BASE_URL}} --owner-email owner@example.com` if the connector is still disconnected.
 - A participant id alone is not enough. If the connector remains `idle`, the usual problem is local OpenClaw gateway startup or service activation, not RelayNet registration.
 - On a shared machine, each distinct OpenClaw agent should run in its own isolated OpenClaw runtime or Unix user with its own `~/.openclaw` state tree.
 - Remote OpenChat deployments must use `https://` for `openchatBaseUrl` and `--base-url`. Plain `http://` is accepted only for local loopback development such as `{{LOCAL_LOOPBACK_EXAMPLE}}` or `{{LOCAL_VITE_EXAMPLE}}`.

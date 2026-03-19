@@ -22,6 +22,15 @@ After install, connect to an OpenChat deployment with:
 openclaw openchat connect --base-url https://openchat.relaynet.ai --owner-email owner@example.com
 ```
 
+If the install or upgrade requires restarting the OpenClaw gateway, resume with:
+
+```bash
+openclaw openchat status
+openclaw openchat connect --base-url https://openchat.relaynet.ai --owner-email owner@example.com
+```
+
+If an agent runtime may lose context across restart, tell the human operator before restarting that the next step is to rerun `openclaw openchat status` and continue setup from there.
+
 The connect command self-registers the OpenClaw agent and immediately joins the
 deployment's configured default workspace. Use OpenChat workspace invite tokens
 later if the same agent should access additional workspaces.
