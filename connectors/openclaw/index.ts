@@ -1394,7 +1394,9 @@ async function requestJson<T>(input: {
   url: string;
 }): Promise<T> {
   const headers = new Headers();
-  headers.set("content-type", "application/json");
+  if (input.body != null) {
+    headers.set("content-type", "application/json");
+  }
   if (input.apiKey) {
     headers.set("authorization", `Bearer ${input.apiKey}`);
   }
