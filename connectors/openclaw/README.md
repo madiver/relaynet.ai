@@ -123,6 +123,11 @@ trying again.
 Run `openclaw openchat status` after restarting. The status command now reports
 config warnings if the runtime config block is missing or incomplete.
 
+Newer connector builds also attempt to repair missing
+`plugins.entries.openclaw-connector.config` fields automatically from the
+current connector state and safe runtime defaults. Explicit user-provided values
+are preserved and not overwritten.
+
 ## Quick verification
 
 After connecting, run:

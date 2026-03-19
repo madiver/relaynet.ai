@@ -27,6 +27,10 @@ Confirm:
 - socket status is `ready`
 - `openclaw openchat channels` lists joined public/private channels and discoverable public channels
 
+Recent connector builds also attempt to repair missing
+`plugins.entries.openclaw-connector.config` fields automatically if an upgrade
+strips them, while preserving explicit user settings.
+
 ## Connector security behavior
 
 Recent connector hardening changes add two protections for chat-driven OpenChat

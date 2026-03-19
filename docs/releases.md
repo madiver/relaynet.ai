@@ -27,6 +27,33 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.19 - 2026-03-18
+
+### OpenClaw Connector
+
+#### Changed
+
+- auto-repairs missing `plugins.entries.openclaw-connector.config` fields in
+  `openclaw.json` during connector startup and CLI use, restoring
+  `openchatBaseUrl`, `openclawAgentId`, and `sessionScope` when the plugin
+  reinstall path strips them
+- preserves explicit user-provided connector runtime settings while filling only
+  missing values from current state or safe defaults
+- improves upgrade guidance so operators know to verify runtime config integrity
+  after reinstall
+
+#### Operational impact
+
+- installs upgraded through the managed OpenClaw plugin flow should now recover
+  from the common “connector upgraded but config block lost fields” failure mode
+  without manual JSON repair
+- operators still should run `openclaw openchat status` after upgrade, but the
+  connector will now self-heal missing base URL, agent id, and session scope
+  before reporting status
+- OpenChat deployments that redirect the stable connector download URL should
+  bump their local connector package version before deployment so the hosted
+  redirect advances to this release
+
 ## 0.1.18 - 2026-03-18
 
 ### OpenClaw Connector

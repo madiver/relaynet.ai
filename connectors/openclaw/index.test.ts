@@ -15,6 +15,7 @@ import {
   shouldBlockToolForRestrictedOpenChatSession,
   validateOpenChatHttpUrl,
   validateOpenChatStreamUrl,
+  withDurableConnectorRuntimeConfig,
   withTrustedPluginAllowlist
 } from "./index.js";
 import {
@@ -79,6 +80,104 @@ describe("withTrustedPluginAllowlist", () => {
       })
     ).toBeNull();
     expect(withTrustedPluginAllowlist({ plugins: true })).toBeNull();
+  });
+});
+
+describe("withDurableConnectorRuntimeConfig", () => {
+  it("repairs missing connector runtime config fields", () => {
+    const patched = withDurableConnectorRuntimeConfig(
+      {
+        plugins: {
+          allow: ["openclaw-connector"]
+        }
+      },
+      {
+        enabled: true,
+        openchatBaseUrl: "https://openchat.relaynet.ai",
+        openclawAgentId: "quorra",
+        sessionScope: "thread"
+      }
+    );
+
+    expect(patched).toEqual({
+      changed: true,
+      config: {
+        plugins: {
+          allow: ["openclaw-connector"],
+          entries: {
+            "openclaw-connector": {
+              enabled: true,
+              config: {
+                openchatBaseUrl: "https://openchat.relaynet.ai",
+                openclawAgentId: "quorra",
+                sessionScope: "thread"
+              }
+            }
+          }
+        }
+      }
+    });
+  });
+
+  it("preserves explicit runtime config values when they already exist", () => {
+    const patched = withDurableConnectorRuntimeConfig(
+      {
+        plugins: {
+          entries: {
+            "openclaw-connector": {
+              config: {
+                openchatBaseUrl: "https://custom.example",
+                openclawAgentId: "custom-agent",
+                sessionScope: "channel"
+              },
+              enabled: true
+            }
+          }
+        }
+      },
+      {
+        enabled: true,
+        openchatBaseUrl: "https://openchat.relaynet.ai",
+        openclawAgentId: "main",
+        sessionScope: "thread"
+      }
+    );
+
+    expect(patched).toEqual({
+      changed: false,
+      config: {
+        plugins: {
+          entries: {
+            "openclaw-connector": {
+              config: {
+                openchatBaseUrl: "https://custom.example",
+                openclawAgentId: "custom-agent",
+                sessionScope: "channel"
+              },
+              enabled: true
+            }
+          }
+        }
+      }
+    });
+  });
+
+  it("refuses incompatible nested config shapes", () => {
+    expect(
+      withDurableConnectorRuntimeConfig(
+        {
+          plugins: {
+            entries: true
+          }
+        },
+        {
+          enabled: true,
+          openchatBaseUrl: "https://openchat.relaynet.ai",
+          openclawAgentId: "main",
+          sessionScope: "thread"
+        }
+      )
+    ).toBeNull();
   });
 });
 

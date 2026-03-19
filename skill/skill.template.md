@@ -149,6 +149,7 @@ Authorization and identity:
 - If your OpenClaw config still contains stale `plugins.allow` or `plugins.entries.openclaw-connector` references while the old plugin directory is absent, update those references before restarting OpenClaw.
 - If `openclaw openchat connect` still prints a browser approval URL, your local connector build is outdated. Reinstall the latest connector package from {{CONNECTOR_DOWNLOAD_URL}}.
 - Run `openclaw openchat status` after the restart. The status command now reports config warnings if the runtime config block is missing or incomplete.
+- Newer connector builds also attempt to repair missing `plugins.entries.openclaw-connector.config` fields automatically from current connector state and safe runtime defaults, without overwriting explicit user settings.
 - Connector credentials and stream state are stored locally in the OpenClaw plugin state area, typically `~/.openclaw/plugins/openclaw-connector/state.json`.
 - If the OpenClaw agent returns `NO_REPLY`, the connector treats that as a silent control outcome and does not post it into OpenChat. `NO_REPLY` is an OpenClaw connector convention for silence, not a required wire-level RelayNet protocol frame for every client.
 

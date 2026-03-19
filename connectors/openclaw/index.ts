@@ -1040,30 +1040,164 @@ export function withTrustedPluginAllowlist(
   };
 }
 
-async function ensurePluginTrustedInOpenClawConfig(api: OpenClawPluginApi): Promise<void> {
+type DurableConnectorRuntimeConfigInput = {
+  enabled?: boolean;
+  openchatBaseUrl?: string | null;
+  openclawAgentId?: string | null;
+  sessionScope?: "thread" | "channel" | null;
+};
+
+export function withDurableConnectorRuntimeConfig(
+  configValue: unknown,
+  input: DurableConnectorRuntimeConfigInput
+): { changed: boolean; config: Record<string, unknown> } | null {
+  if (!isRecord(configValue)) {
+    return null;
+  }
+
+  const root = { ...configValue };
+  const existingPlugins = root.plugins;
+  if (existingPlugins != null && !isRecord(existingPlugins)) {
+    return null;
+  }
+  const plugins = { ...(existingPlugins ?? {}) };
+
+  const existingEntries = plugins.entries;
+  if (existingEntries != null && !isRecord(existingEntries)) {
+    return null;
+  }
+  const entries = { ...(existingEntries ?? {}) };
+
+  const existingPluginEntry = entries[SERVICE_ID];
+  if (existingPluginEntry != null && !isRecord(existingPluginEntry)) {
+    return null;
+  }
+  const pluginEntry = { ...(existingPluginEntry ?? {}) };
+
+  const existingConfig = pluginEntry.config;
+  if (existingConfig != null && !isRecord(existingConfig)) {
+    return null;
+  }
+  const runtimeConfig = { ...(existingConfig ?? {}) };
+
+  let changed = false;
+  if (pluginEntry.enabled == null && input.enabled === true) {
+    pluginEntry.enabled = true;
+    changed = true;
+  }
+
+  const normalizedBaseUrl = validateOpenChatHttpUrl(input.openchatBaseUrl).url;
+  if (
+    (typeof runtimeConfig.openchatBaseUrl !== "string" ||
+      !runtimeConfig.openchatBaseUrl.trim()) &&
+    normalizedBaseUrl
+  ) {
+    runtimeConfig.openchatBaseUrl = normalizedBaseUrl;
+    changed = true;
+  }
+
+  if (
+    (typeof runtimeConfig.openclawAgentId !== "string" ||
+      !runtimeConfig.openclawAgentId.trim()) &&
+    typeof input.openclawAgentId === "string" &&
+    input.openclawAgentId.trim()
+  ) {
+    runtimeConfig.openclawAgentId = input.openclawAgentId.trim();
+    changed = true;
+  }
+
+  if (
+    runtimeConfig.sessionScope !== "thread" &&
+    runtimeConfig.sessionScope !== "channel" &&
+    (input.sessionScope === "thread" || input.sessionScope === "channel")
+  ) {
+    runtimeConfig.sessionScope = input.sessionScope;
+    changed = true;
+  }
+
+  if (!changed) {
+    return {
+      changed: false,
+      config: root
+    };
+  }
+
+  pluginEntry.config = runtimeConfig;
+  entries[SERVICE_ID] = pluginEntry;
+  plugins.entries = entries;
+  root.plugins = plugins;
+
+  return {
+    changed: true,
+    config: root
+  };
+}
+
+async function ensurePluginTrustedInOpenClawConfig(
+  api: OpenClawPluginApi,
+  input: DurableConnectorRuntimeConfigInput = {}
+): Promise<void> {
   try {
     const configPath = resolveOpenClawConfigPath(api);
+    const currentState = await readConnectorState(api);
+    const effectiveRuntimeConfig: DurableConnectorRuntimeConfigInput = {
+      enabled: input.enabled ?? true,
+      openchatBaseUrl:
+        validateOpenChatHttpUrl(input.openchatBaseUrl).url ??
+        currentState?.openchatBaseUrl ??
+        null,
+      openclawAgentId:
+        typeof input.openclawAgentId === "string" && input.openclawAgentId.trim()
+          ? input.openclawAgentId.trim()
+          : "main",
+      sessionScope:
+        input.sessionScope === "channel" || input.sessionScope === "thread"
+          ? input.sessionScope
+          : "thread"
+    };
     await enqueuePathMutation(configPath, async () => {
-      const raw = await fs.readFile(configPath, "utf8");
-      const parsed = JSON.parse(raw) as unknown;
-      const patched = withTrustedPluginAllowlist(parsed);
-      if (!patched) {
+      let parsed: unknown = {};
+      try {
+        const raw = await fs.readFile(configPath, "utf8");
+        parsed = JSON.parse(raw) as unknown;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+          throw error;
+        }
+      }
+
+      const trusted = withTrustedPluginAllowlist(parsed);
+      if (!trusted) {
         api.logger.warn(
           "[openchat] unable to auto-add openclaw-connector to plugins.allow because the current OpenClaw config shape is not compatible"
         );
         return;
       }
-      if (!patched.changed) {
+
+      const durable = withDurableConnectorRuntimeConfig(
+        trusted.config,
+        effectiveRuntimeConfig
+      );
+      if (!durable) {
+        api.logger.warn(
+          "[openchat] unable to repair plugins.entries.openclaw-connector.config because the current OpenClaw config shape is not compatible"
+        );
         return;
       }
-      await writeJsonAtomic(configPath, patched.config);
+
+      if (!trusted.changed && !durable.changed) {
+        return;
+      }
+      await writeJsonAtomic(configPath, durable.config);
+      if (durable.changed) {
+        api.logger.info(
+          "[openchat] repaired missing connector runtime config in openclaw.json"
+        );
+      }
     });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
-      return;
-    }
     api.logger.warn(
-      `[openchat] unable to update plugins.allow automatically: ${
+      `[openchat] unable to update connector runtime config automatically: ${
         error instanceof Error ? error.message : String(error)
       }`
     );
@@ -1448,6 +1582,7 @@ async function startConnectFlow(params: {
   connectorName: string;
   ownerReference: string | null;
   openclawAgentId: string;
+  sessionScope: "thread" | "channel";
 }) {
   const existing = await readConnectorState(params.api);
   if (
@@ -1553,6 +1688,13 @@ async function startConnectFlow(params: {
     registrationStatus: connected.registration_status,
     socketStatus: "idle",
     streamUrl
+  });
+
+  await ensurePluginTrustedInOpenClawConfig(params.api, {
+    enabled: true,
+    openchatBaseUrl: params.baseUrl,
+    openclawAgentId: params.openclawAgentId,
+    sessionScope: params.sessionScope
   });
 
   const lines = [
@@ -1993,7 +2135,12 @@ async function registerOpenChatCli(params: {
     .option("--owner-email <email>", "Owner email address for agent verification")
     .option("--agent <id>", "OpenClaw agent id to run")
     .action(async (options: { agent?: string; baseUrl?: string; name?: string; ownerEmail?: string }) => {
-      await ensurePluginTrustedInOpenClawConfig(params.api);
+      await ensurePluginTrustedInOpenClawConfig(params.api, {
+        enabled: params.config.enabled,
+        openchatBaseUrl: params.config.openchatBaseUrl,
+        openclawAgentId: options.agent?.trim() || params.config.openclawAgentId,
+        sessionScope: params.config.sessionScope
+      });
       const cliBaseUrl = (options.baseUrl ?? "").trim();
       const ownerReference = (options.ownerEmail ?? "").trim() || null;
       if (cliBaseUrl) {
@@ -2009,7 +2156,8 @@ async function registerOpenChatCli(params: {
           baseUrl: resolvedCliBaseUrl.url,
           connectorName: options.name?.trim() || "",
           ownerReference,
-          openclawAgentId: options.agent?.trim() || params.config.openclawAgentId
+          openclawAgentId: options.agent?.trim() || params.config.openclawAgentId,
+          sessionScope: params.config.sessionScope
         });
         console.log(output);
         return;
@@ -2025,7 +2173,8 @@ async function registerOpenChatCli(params: {
         baseUrl,
         connectorName: options.name?.trim() || "",
         ownerReference,
-        openclawAgentId: options.agent?.trim() || params.config.openclawAgentId
+        openclawAgentId: options.agent?.trim() || params.config.openclawAgentId,
+        sessionScope: params.config.sessionScope
       });
       console.log(output);
     });
@@ -2034,7 +2183,12 @@ async function registerOpenChatCli(params: {
     .command("status")
     .description("Show the current OpenChat connector state.")
     .action(async () => {
-      await ensurePluginTrustedInOpenClawConfig(params.api);
+      await ensurePluginTrustedInOpenClawConfig(params.api, {
+        enabled: params.config.enabled,
+        openchatBaseUrl: params.config.openchatBaseUrl,
+        openclawAgentId: params.config.openclawAgentId,
+        sessionScope: params.config.sessionScope
+      });
       const stateResult = await readConnectorStateDetailed(params.api);
       const runtimeConfigAudit = await readConnectorRuntimeConfigAudit(params.api);
       if (stateResult.error && !stateResult.state) {
@@ -2071,7 +2225,12 @@ async function registerOpenChatCli(params: {
     .option("--workspace <id>", "Workspace id to inspect")
     .option("--json", "Emit JSON instead of text")
     .action(async (options: { json?: boolean; workspace?: string }) => {
-      await ensurePluginTrustedInOpenClawConfig(params.api);
+      await ensurePluginTrustedInOpenClawConfig(params.api, {
+        enabled: params.config.enabled,
+        openchatBaseUrl: params.config.openchatBaseUrl,
+        openclawAgentId: params.config.openclawAgentId,
+        sessionScope: params.config.sessionScope
+      });
       const stateResult = await readConnectorStateDetailed(params.api);
       if (stateResult.error && !stateResult.state) {
         throw new Error(stateResult.error);
@@ -2101,7 +2260,12 @@ async function registerOpenChatCli(params: {
     .description("Join a discoverable public OpenChat channel by channel id.")
     .option("--channel <id>", "Channel id to join")
     .action(async (options: { channel?: string }) => {
-      await ensurePluginTrustedInOpenClawConfig(params.api);
+      await ensurePluginTrustedInOpenClawConfig(params.api, {
+        enabled: params.config.enabled,
+        openchatBaseUrl: params.config.openchatBaseUrl,
+        openclawAgentId: params.config.openclawAgentId,
+        sessionScope: params.config.sessionScope
+      });
       const channelId = (options.channel ?? "").trim();
       if (!channelId) {
         throw new Error("Pass --channel <channel-id>.");
@@ -2135,7 +2299,12 @@ async function registerOpenChatCli(params: {
     .description("Leave a joined OpenChat channel by channel id.")
     .option("--channel <id>", "Channel id to leave")
     .action(async (options: { channel?: string }) => {
-      await ensurePluginTrustedInOpenClawConfig(params.api);
+      await ensurePluginTrustedInOpenClawConfig(params.api, {
+        enabled: params.config.enabled,
+        openchatBaseUrl: params.config.openchatBaseUrl,
+        openclawAgentId: params.config.openclawAgentId,
+        sessionScope: params.config.sessionScope
+      });
       const channelId = (options.channel ?? "").trim();
       if (!channelId) {
         throw new Error("Pass --channel <channel-id>.");
@@ -2168,7 +2337,12 @@ async function registerOpenChatCli(params: {
     .command("disconnect")
     .description("Remove the local OpenChat connector credentials.")
     .action(async () => {
-      await ensurePluginTrustedInOpenClawConfig(params.api);
+      await ensurePluginTrustedInOpenClawConfig(params.api, {
+        enabled: params.config.enabled,
+        openchatBaseUrl: params.config.openchatBaseUrl,
+        openclawAgentId: params.config.openclawAgentId,
+        sessionScope: params.config.sessionScope
+      });
       await clearConnectorState(params.api);
       console.log("OpenChat connector state cleared.");
     });
@@ -2195,7 +2369,12 @@ const plugin = {
   },
   register(api: OpenClawPluginApi) {
     const config = resolvePluginConfig(api.pluginConfig);
-    void ensurePluginTrustedInOpenClawConfig(api);
+    void ensurePluginTrustedInOpenClawConfig(api, {
+      enabled: config.enabled,
+      openchatBaseUrl: config.openchatBaseUrl,
+      openclawAgentId: config.openclawAgentId,
+      sessionScope: config.sessionScope
+    });
     api.on("before_tool_call", (event, ctx) => {
       if (!shouldBlockToolForRestrictedOpenChatSession(ctx.sessionKey, event.toolName)) {
         return;
