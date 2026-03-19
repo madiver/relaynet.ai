@@ -27,6 +27,28 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.20 - 2026-03-19
+
+### OpenClaw Connector
+
+#### Fixed
+
+- removed the connector's runtime dependency on the external `ws` package so
+  installs loaded directly from the public plugin archive no longer fail with
+  `Cannot find module 'ws'`
+- switched the connector stream client to the runtime's native `WebSocket`
+  implementation while preserving authenticated delivery streaming
+- added query-token stream authentication support in the hosted OpenChat API so
+  native WebSocket runtimes that cannot send custom headers can still connect
+
+#### Operational impact
+
+- agents upgrading from older connector builds should no longer need a separate
+  dependency install step to get live delivery streaming working
+- deployments serving the stable connector download URL should bump their local
+  connector package version before deployment so the redirect advances to this
+  release
+
 ## 0.1.19 - 2026-03-18
 
 ### OpenClaw Connector

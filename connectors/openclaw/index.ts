@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import WebSocket from "ws";
 import type { OpenClawPluginApi, OpenClawPluginService } from "openclaw/plugin-sdk/core";
 import {
   getConnectorServiceActivationDecision,
@@ -34,6 +33,8 @@ type ResolvedConnectorPluginConfig = {
 type ConnectorRuntimeConfigAudit = {
   warnings: string[];
 };
+
+type OpenChatWebSocket = WebSocket;
 
 type ConnectorState = {
   version: 1;
@@ -1229,6 +1230,32 @@ async function readConnectorRuntimeConfigAudit(
   }
 }
 
+function buildAuthorizedStreamUrl(state: ConnectorState) {
+  const url = new URL(state.streamUrl);
+  url.searchParams.set("api_key", state.apiKey);
+  return url.toString();
+}
+
+async function websocketMessageDataToText(data: unknown): Promise<string> {
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return Buffer.from(data).toString("utf8");
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf8");
+  }
+
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    return await data.text();
+  }
+
+  return String(data ?? "");
+}
+
 function sanitizeSessionSegment(value: string) {
   return value
     .trim()
@@ -1813,7 +1840,7 @@ function createConnectorService(
 ): OpenClawPluginService {
   let stopping = false;
   let loopPromise: Promise<void> | null = null;
-  let activeSocket: WebSocket | null = null;
+  let activeSocket: OpenChatWebSocket | null = null;
   let lastStateReadError: string | null = null;
 
   const processDelivery = async (
@@ -1926,11 +1953,7 @@ function createConnectorService(
     });
 
     await new Promise<void>((resolve, reject) => {
-      const socket = new WebSocket(state.streamUrl, {
-        headers: {
-          Authorization: `Bearer ${state.apiKey}`
-        }
-      });
+      const socket = new WebSocket(buildAuthorizedStreamUrl(state));
       activeSocket = socket;
       let settled = false;
       let readyTimer: NodeJS.Timeout | null = null;
@@ -1952,7 +1975,7 @@ function createConnectorService(
         resolve();
       };
 
-      socket.on("open", () => {
+      socket.addEventListener("open", () => {
         void patchConnectorState(api, {
           socketStatus: "open"
         });
@@ -1960,7 +1983,7 @@ function createConnectorService(
           const error = new Error(
             `OpenChat stream did not become ready within ${STREAM_READY_TIMEOUT_MS}ms`
           );
-          socket.terminate();
+          socket.close();
           settle(error);
         }, STREAM_READY_TIMEOUT_MS);
         socket.send(
@@ -1973,10 +1996,11 @@ function createConnectorService(
         );
       });
 
-      socket.on("message", (raw) => {
+      socket.addEventListener("message", (event) => {
         chain = chain
           .then(async () => {
-            const frame = JSON.parse(raw.toString()) as StreamFrame;
+            const raw = await websocketMessageDataToText(event.data);
+            const frame = JSON.parse(raw) as StreamFrame;
             await patchConnectorState(api, {
               lastFrameAt: new Date().toISOString()
             });
@@ -2026,16 +2050,21 @@ function createConnectorService(
           });
       });
 
-      socket.on("error", (error) => {
+      socket.addEventListener("error", (error) => {
         void patchConnectorState(api, {
-          lastError: error instanceof Error ? error.message : String(error),
+          lastError:
+            typeof ErrorEvent !== "undefined" && error instanceof ErrorEvent
+              ? error.message || "OpenChat stream connection failed"
+              : error instanceof Error
+                ? error.message
+                : "OpenChat stream connection failed",
           lastErrorAt: new Date().toISOString(),
           socketStatus: "error"
         });
         settle(error);
       });
 
-      socket.on("close", () => {
+      socket.addEventListener("close", () => {
         void patchConnectorState(api, {
           socketStatus: "closed"
         });
