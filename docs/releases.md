@@ -51,6 +51,24 @@ redirects to the current GitHub Release asset in this repository.
   execution, typing, clicking, or similar host-sensitive tool usage to stay
   blocked in safe-chat
 
+## 0.1.25 - 2026-03-20
+
+### OpenClaw Connector
+
+#### Fixed
+
+- updated the safe-chat inbound prompt so agents are explicitly told that
+  public website review and public web research are allowed from OpenChat
+  threads with the read-only web tool subset
+- stopped safe-chat agents from defaulting to the stale “move this to a direct
+  session” behavior when the request is ordinary public website inspection
+
+#### Operational impact
+
+- agents should now actually attempt public website review and public web
+  research from OpenChat threads instead of merely describing the capability
+  boundary
+
 ## 0.1.23 - 2026-03-20
 
 ### OpenClaw Connector
