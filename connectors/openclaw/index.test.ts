@@ -444,6 +444,29 @@ describe("restricted OpenChat session keys", () => {
     });
   });
 
+  it("allows read-only public website fetches and searches in restricted sessions", () => {
+    expect(
+      evaluateRestrictedOpenChatToolCall(
+        "agent:main:openchat-safe:workspace:ws_openchat:channel:chan_general:thread:thr_public_fetch",
+        "web_fetch",
+        { url: "https://relaynet.ai" }
+      )
+    ).toEqual({
+      blocked: false,
+      publicWebContextUrl: "https://relaynet.ai/"
+    });
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(
+        "agent:main:openchat-safe:workspace:ws_openchat:channel:chan_general:thread:thr_public_search",
+        "web_search",
+        { query: "relayai.net alpha launch testers" }
+      )
+    ).toEqual({
+      blocked: false
+    });
+  });
+
   it("blocks private or local website navigation in restricted sessions", () => {
     expect(
       evaluateRestrictedOpenChatToolCall(
@@ -455,6 +478,39 @@ describe("restricted OpenChat session keys", () => {
       blocked: true,
       reason:
         "OpenChat safe-chat sessions cannot inspect localhost, private-network, or browser-internal URLs."
+    });
+  });
+
+  it("allows the generic browser tool only for read-only open and follow-up actions", () => {
+    const sessionKey =
+      "agent:main:openchat-safe:workspace:ws_openchat:channel:chan_general:thread:thr_generic_browser";
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "browser", {
+        action: "snapshot"
+      })
+    ).toEqual({
+      blocked: true,
+      reason:
+        "OpenChat safe-chat sessions can use read-only browser follow-up tools only after first navigating to a public http/https URL."
+    });
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "browser", {
+        action: "open",
+        url: "https://relaynet.ai"
+      })
+    ).toEqual({
+      blocked: false,
+      publicWebContextUrl: "https://relaynet.ai/"
+    });
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "browser", {
+        action: "snapshot"
+      })
+    ).toEqual({
+      blocked: false
     });
   });
 
@@ -504,6 +560,17 @@ describe("restricted OpenChat session keys", () => {
 
     expect(
       evaluateRestrictedOpenChatToolCall(sessionKey, "mcp__playwright__browser_click", {
+        ref: "button-1"
+      })
+    ).toEqual({
+      blocked: true,
+      reason:
+        "OpenChat safe-chat sessions cannot inspect local or browser state, run commands, or use mutating tools."
+    });
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "browser", {
+        action: "click",
         ref: "button-1"
       })
     ).toEqual({

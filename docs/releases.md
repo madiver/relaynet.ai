@@ -27,6 +27,26 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.26 - 2026-03-20
+
+### OpenClaw Connector
+
+#### Fixed
+
+- widened the safe-chat read-only web allowlist to the actual OpenClaw runtime
+  tool names, including `web_fetch`, `web_search`, and the read-only `browser`
+  actions used for public website review
+- stopped safe-chat from incorrectly telling agents that public web fetch/search
+  was blocked when the request was ordinary public website research
+
+#### Operational impact
+
+- agents in OpenChat threads should now be able to research public sites and
+  fetch public web pages without escalating to a direct session, as long as the
+  request stays within the read-only public-web boundary
+- local state inspection, localhost/private-network URLs, embedded credentials,
+  and mutating browser actions remain blocked
+
 ## 0.1.24 - 2026-03-20
 
 ### OpenClaw Connector

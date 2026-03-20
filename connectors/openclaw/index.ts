@@ -1377,12 +1377,22 @@ const RESTRICTED_PUBLIC_WEB_NAVIGATION_TOOL_SUFFIXES = [
   "browser_open",
   "browser_goto"
 ];
+const RESTRICTED_PUBLIC_WEB_BROWSER_TOOL_NAMES = ["browser"];
 const RESTRICTED_PUBLIC_WEB_FOLLOWUP_TOOL_SUFFIXES = [
   "browser_snapshot",
   "browser_take_screenshot",
   "browser_wait_for"
 ];
-const RESTRICTED_PUBLIC_WEB_FETCH_TOOL_SUFFIXES = ["fetch"];
+const RESTRICTED_PUBLIC_WEB_FETCH_TOOL_SUFFIXES = ["fetch", "web_fetch"];
+const RESTRICTED_PUBLIC_WEB_SEARCH_TOOL_SUFFIXES = ["web_search"];
+const RESTRICTED_PUBLIC_WEB_BROWSER_OPEN_ACTIONS = ["open"];
+const RESTRICTED_PUBLIC_WEB_BROWSER_FOLLOWUP_ACTIONS = [
+  "snapshot",
+  "screenshot",
+  "take_screenshot",
+  "wait",
+  "wait_for"
+];
 const RESTRICTED_OPENCHAT_PUBLIC_WEB_CONTEXT_TTL_MS = 10 * 60 * 1000;
 const restrictedOpenChatPublicWebContexts = new Map<string, { recordedAt: number; url: string }>();
 
@@ -1477,6 +1487,41 @@ function extractUrlCandidateFromToolParams(
   }
   for (const value of Object.values(record)) {
     const candidate = extractUrlCandidateFromToolParams(value, visited);
+    if (candidate) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function extractBrowserActionCandidateFromToolParams(
+  params: unknown,
+  visited = new Set<unknown>()
+): string | null {
+  if (typeof params === "string") {
+    return params.trim().toLowerCase() || null;
+  }
+  if (!params || typeof params !== "object" || visited.has(params)) {
+    return null;
+  }
+  visited.add(params);
+  if (Array.isArray(params)) {
+    for (const item of params) {
+      const candidate = extractBrowserActionCandidateFromToolParams(item, visited);
+      if (candidate) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+  const record = params as Record<string, unknown>;
+  for (const key of ["action", "mode", "operation"]) {
+    if (typeof record[key] === "string" && record[key].trim()) {
+      return record[key].trim().toLowerCase();
+    }
+  }
+  for (const value of Object.values(record)) {
+    const candidate = extractBrowserActionCandidateFromToolParams(value, visited);
     if (candidate) {
       return candidate;
     }
@@ -1586,6 +1631,52 @@ export function evaluateRestrictedOpenChatToolCall(
       blocked: false,
       publicWebContextUrl: normalizedUrl.url
     };
+  }
+
+  if (
+    restrictedToolNameMatchesSuffix(normalizedToolName, RESTRICTED_PUBLIC_WEB_SEARCH_TOOL_SUFFIXES)
+  ) {
+    return { blocked: false };
+  }
+
+  if (
+    restrictedToolNameMatchesSuffix(normalizedToolName, RESTRICTED_PUBLIC_WEB_BROWSER_TOOL_NAMES)
+  ) {
+    const browserAction = extractBrowserActionCandidateFromToolParams(toolParams);
+    if (
+      browserAction &&
+      RESTRICTED_PUBLIC_WEB_BROWSER_OPEN_ACTIONS.includes(browserAction)
+    ) {
+      const urlCandidate = extractUrlCandidateFromToolParams(toolParams);
+      const normalizedUrl = normalizeRestrictedOpenChatPublicWebUrl(urlCandidate);
+      if (normalizedUrl.error || !normalizedUrl.url) {
+        return {
+          blocked: true,
+          reason:
+            normalizedUrl.error ??
+            "OpenChat safe-chat sessions may only inspect public websites with an explicit http/https URL."
+        };
+      }
+      rememberRestrictedOpenChatPublicWebContext(sessionKey, normalizedUrl.url);
+      return {
+        blocked: false,
+        publicWebContextUrl: normalizedUrl.url
+      };
+    }
+
+    if (
+      browserAction &&
+      RESTRICTED_PUBLIC_WEB_BROWSER_FOLLOWUP_ACTIONS.includes(browserAction)
+    ) {
+      if (canRestrictedOpenChatSessionUsePublicWebFollowupTool(sessionKey)) {
+        return { blocked: false };
+      }
+      return {
+        blocked: true,
+        reason:
+          "OpenChat safe-chat sessions can use read-only browser follow-up tools only after first navigating to a public http/https URL."
+      };
+    }
   }
 
   if (
@@ -1731,6 +1822,7 @@ export function buildInboundPrompt(frame: {
     "Apply your OpenChat participation rules to decide whether you should reply.",
     "If your participation rules say silence is appropriate, return NO_REPLY.",
     "If the user asks you to review or research a public website, you may use read-only web tools on explicit public http/https URLs from this OpenChat thread.",
+    "Read-only web search is also allowed for public research in this OpenChat thread.",
     "Do not claim tool access is unavailable for public website review here unless a tool call is actually blocked.",
     "Local/browser state inspection, localhost/private-network URLs, command execution, and mutating browser actions are still off-limits in this safe-chat path.",
     "",
