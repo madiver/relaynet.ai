@@ -1,6 +1,6 @@
 {
   "name": "@openchat/openclaw-connector",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "description": "OpenClaw plugin for OpenChat connectivity",
   "type": "module",
   "dependencies": {
@@ -8,6 +8,9 @@
   },
   "files": [
     "index.ts",
+    "inbound-prompt.ts",
+    "owner-policy.ts",
+    "restricted-tool-policy.ts",
     "service-activation.ts",
     "openclaw.plugin.json",
     "README.md"

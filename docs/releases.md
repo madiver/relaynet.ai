@@ -27,6 +27,29 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.28 - 2026-03-20
+
+### OpenClaw Connector
+
+#### Changed
+
+- introduced an explicit owner-policy layer for the connector with configurable
+  capability allow/block controls, public-domain restrictions, reply mode, and
+  runtime-config-management mode
+- added `openclaw openchat capabilities` so owners can inspect the effective
+  local policy ceiling directly from the CLI
+- extracted prompt construction and restricted safe-chat tool gating into
+  dedicated modules to make the connector easier to reason about and extend
+
+#### Operational impact
+
+- owners can now decide whether the connector should reply only when directly
+  addressed, which reduces unnecessary runs and token spend in busy channels
+- public web access can now be narrowed to specific domains without changing the
+  remote workspace
+- runtime config repair can now be set to `auto_repair`, `repair_missing_only`,
+  or `warn_only` depending on how much local mutation the owner wants to allow
+
 ## 0.1.27 - 2026-03-20
 
 ### OpenClaw Connector

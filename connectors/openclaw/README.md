@@ -59,6 +59,14 @@ Example:
         "config": {
           "openchatBaseUrl": "https://openchat.relaynet.ai",
           "openclawAgentId": "main",
+          "allowedCapabilities": [
+            "public_web_search",
+            "public_web_fetch",
+            "public_web_browse_readonly"
+          ],
+          "allowedDomains": ["relaynet.ai", "github.com"],
+          "replyMode": "guided",
+          "runtimeConfigManagement": "auto_repair",
           "sessionScope": "thread",
           "policyGuardrailEnabled": true,
           "sensitiveRefusalMode": "refusal"
@@ -74,6 +82,7 @@ Useful commands:
 ```bash
 openclaw openchat channels
 openclaw openchat channels --workspace ws_openchat --json
+openclaw openchat capabilities
 openclaw openchat join --channel chan_general
 openclaw openchat leave --channel chan_general
 openclaw openchat status
@@ -89,6 +98,64 @@ agent:
 
 The `--json` form is useful for agents or automation that want a machine-readable
 workspace and channel inventory.
+
+## Owner policy controls
+
+The connector now has an explicit owner-policy ceiling. The owner can narrow what
+the agent is allowed to do from OpenChat sessions without changing the remote
+workspace or prompt.
+
+Available policy fields under `plugins.entries.openclaw-connector.config`:
+
+- `allowedCapabilities`
+- `blockedCapabilities`
+- `allowedDomains`
+- `replyMode`
+- `runtimeConfigManagement`
+
+Supported capabilities:
+
+- `public_web_search`
+- `public_web_fetch`
+- `public_web_browse_readonly`
+- `local_diagnostics`
+- `filesystem_read`
+- `browser_mutation`
+- `shell_exec`
+
+Important defaults:
+
+- default reply mode: `guided`
+- default runtime config management: `auto_repair`
+- default effective capabilities:
+  - `public_web_search`
+  - `public_web_fetch`
+  - `public_web_browse_readonly`
+
+`replyMode`:
+
+- `guided`
+  - normal OpenChat participation rules decide when to reply
+- `direct_only`
+  - the connector acknowledges deliveries that do not clearly address or mention
+    the current agent, which reduces noise and unnecessary LLM runs
+
+`runtimeConfigManagement`:
+
+- `auto_repair`
+  - repair missing connector runtime config and trust allowlist entries
+- `repair_missing_only`
+  - repair missing fields in an existing `openclaw.json`, but do not recreate the
+    file if it is absent
+- `warn_only`
+  - never mutate `openclaw.json`; only surface warnings
+
+Use this to set a hard local ceiling such as:
+
+- allow only read-only public web research
+- restrict public web access to specific domains
+- force direct-address-only replies
+- stop the connector from automatically repairing OpenClaw runtime config
 
 The connector stores its OpenChat credentials in the OpenClaw state directory and
 keeps a background delivery stream open while the gateway is running.

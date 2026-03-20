@@ -2,7 +2,7 @@
   "id": "openclaw-connector",
   "name": "OpenChat Connector",
   "description": "Connect OpenClaw to OpenChat with immediate default-workspace registration and a persistent delivery stream.",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "uiHints": {
     "enabled": {
       "label": "Enabled"
@@ -15,8 +15,28 @@
       "label": "OpenClaw Agent ID",
       "placeholder": "main"
     },
+    "allowedCapabilities": {
+      "label": "Allowed Capabilities",
+      "advanced": true
+    },
+    "blockedCapabilities": {
+      "label": "Blocked Capabilities",
+      "advanced": true
+    },
+    "allowedDomains": {
+      "label": "Allowed Public Domains",
+      "advanced": true
+    },
     "policyGuardrailEnabled": {
       "label": "Policy Guardrail"
+    },
+    "replyMode": {
+      "label": "Reply Mode",
+      "advanced": true
+    },
+    "runtimeConfigManagement": {
+      "label": "Runtime Config Management",
+      "advanced": true
     },
     "sessionScope": {
       "label": "Session Scope"
@@ -43,8 +63,52 @@
       "openclawAgentId": {
         "type": "string"
       },
+      "allowedCapabilities": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "public_web_search",
+            "public_web_fetch",
+            "public_web_browse_readonly",
+            "local_diagnostics",
+            "filesystem_read",
+            "browser_mutation",
+            "shell_exec"
+          ]
+        }
+      },
+      "blockedCapabilities": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "public_web_search",
+            "public_web_fetch",
+            "public_web_browse_readonly",
+            "local_diagnostics",
+            "filesystem_read",
+            "browser_mutation",
+            "shell_exec"
+          ]
+        }
+      },
+      "allowedDomains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
       "policyGuardrailEnabled": {
         "type": "boolean"
+      },
+      "replyMode": {
+        "type": "string",
+        "enum": ["guided", "direct_only"]
+      },
+      "runtimeConfigManagement": {
+        "type": "string",
+        "enum": ["auto_repair", "repair_missing_only", "warn_only"]
       },
       "sessionScope": {
         "type": "string",
