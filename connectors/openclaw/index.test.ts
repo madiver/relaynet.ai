@@ -6,6 +6,7 @@ import {
   detectSensitiveIntrospectionByRules,
   formatAvailableChannelsText,
   inspectConnectorRuntimeConfig,
+  isMessageExplicitlyAddressedToAgent,
   isRestrictedOpenChatSessionKey,
   mapPolicyGuardrailResultToDecision,
   makeAtomicTempPath,
@@ -341,6 +342,54 @@ describe("mapPolicyGuardrailResultToDecision", () => {
   });
 });
 
+describe("isMessageExplicitlyAddressedToAgent", () => {
+  it("recognizes direct mentions by participant id", () => {
+    expect(
+      isMessageExplicitlyAddressedToAgent({
+        message: {
+          body: { text: "What do you think?" },
+          mentions: ["part_ram"]
+        },
+        openclawAgentId: "ram",
+        participantId: "part_ram"
+      })
+    ).toBe(true);
+  });
+
+  it("recognizes name-addressed messages", () => {
+    expect(
+      isMessageExplicitlyAddressedToAgent({
+        message: {
+          body: { text: "Ram, what do you think of Quorra's assessment?" }
+        },
+        openclawAgentId: "ram",
+        participantId: "part_ram"
+      })
+    ).toBe(true);
+    expect(
+      isMessageExplicitlyAddressedToAgent({
+        message: {
+          body: { text: "Ram what do you think of Quorra's assessment?" }
+        },
+        openclawAgentId: "ram",
+        participantId: "part_ram"
+      })
+    ).toBe(true);
+  });
+
+  it("does not treat another agent's name as a direct address", () => {
+    expect(
+      isMessageExplicitlyAddressedToAgent({
+        message: {
+          body: { text: "Quorra, what do you think about the crypto market?" }
+        },
+        openclawAgentId: "ram",
+        participantId: "part_ram"
+      })
+    ).toBe(false);
+  });
+});
+
 describe("restricted OpenChat session keys", () => {
   it("recognizes safe-chat and policy session namespaces", () => {
     expect(
@@ -462,6 +511,58 @@ describe("buildInboundPrompt", () => {
     expect(prompt).toContain("If your participation rules say silence is appropriate, return NO_REPLY.");
     expect(prompt).toContain("BEGIN OPENCHAT MESSAGE");
     expect(prompt).toContain("END OPENCHAT MESSAGE");
+  });
+
+  it("includes bounded recent channel and thread context when provided", () => {
+    const prompt = buildInboundPrompt({
+      delivery: {
+        channel_id: "chan_alpha_general",
+        delivery_id: "deliv_test",
+        delivery_sequence: 7,
+        message_id: "msg_test",
+        thread_id: "thr_followup",
+        workspace_id: "ws_openchat"
+      },
+      message: {
+        body: { text: "Ram, what do you think of Quorra's assessment?" },
+        channel_id: "chan_alpha_general",
+        message_id: "msg_test",
+        thread_id: "thr_followup",
+        workspace_id: "ws_openchat",
+        sender: {
+          display_name: "Mark",
+          participant_type: "human"
+        }
+      },
+      recentChannelContext: [
+        {
+          createdAt: "2026-03-20T10:50:00.000Z",
+          messageId: "msg_quorra",
+          replyToMessageId: null,
+          senderName: "Quorra",
+          senderType: "agent",
+          text: "Constructive, but selective. I would focus on majors and liquidity.",
+          threadId: "thr_market"
+        }
+      ],
+      recentThreadContext: [
+        {
+          createdAt: "2026-03-20T10:51:00.000Z",
+          messageId: "msg_mark_followup",
+          replyToMessageId: "msg_quorra",
+          senderName: "Mark",
+          senderType: "human",
+          text: "Ram, what do you think of Quorra's assessment?",
+          threadId: "thr_followup"
+        }
+      ]
+    });
+
+    expect(prompt).toContain("RECENT CHANNEL CONTEXT BEFORE THIS MESSAGE");
+    expect(prompt).toContain("Quorra (agent)");
+    expect(prompt).toContain("Constructive, but selective.");
+    expect(prompt).toContain("RECENT THREAD CONTEXT BEFORE THIS MESSAGE");
+    expect(prompt).toContain("reply to msg_quorra");
   });
 });
 
