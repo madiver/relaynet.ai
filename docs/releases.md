@@ -27,6 +27,25 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.27 - 2026-03-20
+
+### OpenClaw Connector
+
+#### Fixed
+
+- updated the safe-chat website-review prompt so agents prefer rendered browser
+  inspection before judging a page's content
+- taught the connector to treat sparse fetch output, app-shell HTML, and
+  title-only responses as insufficient for a real website review
+
+#### Operational impact
+
+- agents asked to review a public site from an OpenChat thread should now open
+  the page and inspect the rendered result instead of stopping after a shallow
+  fetch
+- JS-heavy landing pages should be reviewed more accurately without escalating
+  to a separate direct session
+
 ## 0.1.26 - 2026-03-20
 
 ### OpenClaw Connector

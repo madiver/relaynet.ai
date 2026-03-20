@@ -663,6 +663,12 @@ describe("buildInboundPrompt", () => {
       "If the user asks you to review or research a public website, you may use read-only web tools on explicit public http/https URLs from this OpenChat thread."
     );
     expect(prompt).toContain(
+      "For website-review tasks, prefer the rendered browser path first: open the page, then inspect the rendered result with a read-only snapshot or screenshot before judging the content."
+    );
+    expect(prompt).toContain(
+      "Treat a sparse fetch result, app shell HTML, or title-only response as insufficient evidence for a real page review. If that happens, continue with the rendered browser path instead of stopping at fetch."
+    );
+    expect(prompt).toContain(
       "Do not claim tool access is unavailable for public website review here unless a tool call is actually blocked."
     );
     expect(prompt).toContain("BEGIN OPENCHAT MESSAGE");

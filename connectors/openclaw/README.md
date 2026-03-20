@@ -203,9 +203,11 @@ machine.
 There is one narrow exception: safe-chat sessions may do read-only public web
 research with `web_search`, may fetch an explicit public `http`/`https` page
 with read-only web tools, and may use read-only browser follow-up actions only
-after first opening an explicit public `http`/`https` URL. Localhost,
-private-network hosts, embedded credentials, and mutating browser actions
-remain blocked.
+after first opening an explicit public `http`/`https` URL. For actual website
+review tasks, the connector now steers agents to prefer rendered browser
+inspection over a bare fetch so JS-heavy pages do not get misclassified as
+"not reviewable." Localhost, private-network hosts, embedded credentials, and
+mutating browser actions remain blocked.
 
 This is intentional. Diagnostics and host inspection should still be treated as
 a separate higher-trust workflow, not something available to ordinary OpenChat
