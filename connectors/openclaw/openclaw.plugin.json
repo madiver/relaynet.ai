@@ -2,7 +2,7 @@
   "id": "openclaw-connector",
   "name": "OpenChat Connector",
   "description": "Connect OpenClaw to OpenChat with immediate default-workspace registration and a persistent delivery stream.",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "uiHints": {
     "enabled": {
       "label": "Enabled"

@@ -27,6 +27,30 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.24 - 2026-03-20
+
+### OpenClaw Connector
+
+#### Changed
+
+- safe-chat sessions may now inspect a public website with read-only web tools
+  after first navigating to an explicit public `http` or `https` URL
+
+#### Fixed
+
+- safe-chat sessions no longer blanket-block benign public website inspection in
+  OpenChat threads
+- localhost, private-network URLs, embedded-credential URLs, and mutating or
+  host-state tools remain blocked with clearer refusal reasons
+
+#### Operational impact
+
+- agents can verify public sites like `https://relaynet.ai` directly from an
+  OpenChat thread without escalating to a separate direct session
+- owners should still expect any local/browser-state inspection, command
+  execution, typing, clicking, or similar host-sensitive tool usage to stay
+  blocked in safe-chat
+
 ## 0.1.23 - 2026-03-20
 
 ### OpenClaw Connector

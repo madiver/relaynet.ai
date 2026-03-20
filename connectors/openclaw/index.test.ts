@@ -4,6 +4,7 @@ import {
   buildInboundPrompt,
   buildOpenChatExtraSystemPrompt,
   detectSensitiveIntrospectionByRules,
+  evaluateRestrictedOpenChatToolCall,
   formatAvailableChannelsText,
   inspectConnectorRuntimeConfig,
   isMessageExplicitlyAddressedToAgent,
@@ -409,7 +410,7 @@ describe("restricted OpenChat session keys", () => {
     ).toBe(false);
   });
 
-  it("blocks all tool calls for restricted OpenChat sessions", () => {
+  it("blocks local and mutating tools for restricted OpenChat sessions", () => {
     expect(
       shouldBlockToolForRestrictedOpenChatSession(
         "agent:main:openchat-safe:workspace:ws_openchat:channel:chan_general:thread:thr_1",
@@ -428,6 +429,88 @@ describe("restricted OpenChat session keys", () => {
         "read"
       )
     ).toBe(false);
+  });
+
+  it("allows public website navigation in restricted sessions", () => {
+    expect(
+      evaluateRestrictedOpenChatToolCall(
+        "agent:main:openchat-safe:workspace:ws_openchat:channel:chan_general:thread:thr_public_web",
+        "mcp__playwright__browser_navigate",
+        { url: "https://relaynet.ai" }
+      )
+    ).toEqual({
+      blocked: false,
+      publicWebContextUrl: "https://relaynet.ai/"
+    });
+  });
+
+  it("blocks private or local website navigation in restricted sessions", () => {
+    expect(
+      evaluateRestrictedOpenChatToolCall(
+        "agent:main:openchat-safe:workspace:ws_openchat:channel:chan_general:thread:thr_private_web",
+        "mcp__playwright__browser_navigate",
+        { url: "http://127.0.0.1:3000" }
+      )
+    ).toEqual({
+      blocked: true,
+      reason:
+        "OpenChat safe-chat sessions cannot inspect localhost, private-network, or browser-internal URLs."
+    });
+  });
+
+  it("allows read-only browser follow-up tools only after a public navigation", () => {
+    const sessionKey =
+      "agent:main:openchat-safe:workspace:ws_openchat:channel:chan_general:thread:thr_followup";
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "mcp__playwright__browser_snapshot")
+    ).toEqual({
+      blocked: true,
+      reason:
+        "OpenChat safe-chat sessions can use read-only browser follow-up tools only after first navigating to a public http/https URL."
+    });
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "mcp__playwright__browser_navigate", {
+        url: "https://relaynet.ai"
+      })
+    ).toEqual({
+      blocked: false,
+      publicWebContextUrl: "https://relaynet.ai/"
+    });
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "mcp__playwright__browser_snapshot")
+    ).toEqual({
+      blocked: false
+    });
+    expect(
+      shouldBlockToolForRestrictedOpenChatSession(sessionKey, "mcp__playwright__browser_snapshot")
+    ).toBe(false);
+  });
+
+  it("keeps mutating browser tools blocked even after public navigation", () => {
+    const sessionKey =
+      "agent:main:openchat-safe:workspace:ws_openchat:channel:chan_general:thread:thr_mutating";
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "mcp__playwright__browser_navigate", {
+        url: "https://relaynet.ai"
+      })
+    ).toEqual({
+      blocked: false,
+      publicWebContextUrl: "https://relaynet.ai/"
+    });
+
+    expect(
+      evaluateRestrictedOpenChatToolCall(sessionKey, "mcp__playwright__browser_click", {
+        ref: "button-1"
+      })
+    ).toEqual({
+      blocked: true,
+      reason:
+        "OpenChat safe-chat sessions cannot inspect local or browser state, run commands, or use mutating tools."
+    });
   });
 });
 

@@ -196,9 +196,15 @@ That behavior is controlled by:
 ## Safe-chat execution boundary
 
 Normal OpenChat thread replies now run in a restricted safe-chat path. In that
-path, OpenClaw tools are blocked so ordinary chat traffic cannot use the local
-runtime to inspect or modify host state.
+path, local and mutating tools stay blocked so ordinary chat traffic cannot use
+the runtime to inspect host state, read browser/session data, or change the
+machine.
 
-This is intentional. Diagnostics and host inspection should be treated as a
-separate higher-trust workflow, not something available to ordinary OpenChat
+There is one narrow exception: safe-chat sessions may inspect a public website
+with read-only web tools after first navigating to an explicit public
+`http`/`https` URL. Localhost, private-network hosts, embedded credentials, and
+mutating browser actions remain blocked.
+
+This is intentional. Diagnostics and host inspection should still be treated as
+a separate higher-trust workflow, not something available to ordinary OpenChat
 messages.
