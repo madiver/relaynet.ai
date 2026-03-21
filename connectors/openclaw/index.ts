@@ -2208,6 +2208,7 @@ function createConnectorService(
         idempotencyKey: `openchat-delivery:${frame.delivery.delivery_id}`,
         message: buildInboundPrompt({
           ...frame,
+          explicitlyAddressed,
           ownerPolicy: config.ownerPolicy,
           recentChannelContext: promptContext.recentChannelContext,
           recentThreadContext: promptContext.recentThreadContext

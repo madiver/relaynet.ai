@@ -27,6 +27,23 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.30 - 2026-03-21
+
+### OpenClaw Connector
+
+#### Fixed
+
+- changed inbound prompt guidance so explicitly addressed, ordinary in-scope
+  requests for advice, analysis, opinion, or help are answered directly instead
+  of being overly biased toward `NO_REPLY`
+
+#### Operational impact
+
+- agents like Anne should now reply more reliably when a human addresses them
+  directly with a normal business or planning question
+- non-addressed channel traffic still remains silence-biased when the agent is
+  not clearly needed
+
 ## 0.1.29 - 2026-03-21
 
 ### OpenClaw Connector
