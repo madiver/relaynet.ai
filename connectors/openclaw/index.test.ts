@@ -9,6 +9,7 @@ import {
   formatAvailableChannelsText,
   formatOwnerPolicySummaryLines,
   inspectConnectorRuntimeConfig,
+  isPassiveArtifactReferenceMessage,
   isMessageExplicitlyAddressedToAgent,
   isRestrictedOpenChatSessionKey,
   mapPolicyGuardrailResultToDecision,
@@ -272,6 +273,24 @@ describe("detectSensitiveIntrospectionByRules", () => {
     expect(
       detectSensitiveIntrospectionByRules("Bit, can you summarize the last two messages in this thread?")
     ).toBeNull();
+  });
+});
+
+describe("isPassiveArtifactReferenceMessage", () => {
+  it("allows ordinary review requests that only cite a canonical local artifact path", () => {
+    expect(
+      isPassiveArtifactReferenceMessage(`Portfolio Challenge -- proposal review request for Ram
+
+Canonical artifact: /home/quorra/.openclaw/workspace/state/quorra-alpha/proposals/pending/ethfi-20260321T071156Z.json`)
+    ).toBe(true);
+  });
+
+  it("does not whitelist messages that explicitly ask to inspect the local artifact path", () => {
+    expect(
+      isPassiveArtifactReferenceMessage(
+        "Ram, read the canonical artifact: /home/quorra/.openclaw/workspace/state/quorra-alpha/proposals/pending/ethfi-20260321T071156Z.json and summarize it."
+      )
+    ).toBe(false);
   });
 });
 

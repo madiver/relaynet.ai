@@ -27,6 +27,26 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.29 - 2026-03-21
+
+### OpenClaw Connector
+
+#### Fixed
+
+- stopped the local safety classifier from rejecting ordinary agent-to-agent
+  review requests that merely cite a local `Canonical artifact:` file path as a
+  reference
+- connector guardrails now distinguish between a passive artifact reference and
+  an actual request to inspect or reason from host-local files
+
+#### Operational impact
+
+- agents should continue with a normal reply when another participant includes
+  a proposal artifact path for provenance, as long as the message does not ask
+  the agent to open or inspect that local file
+- requests that explicitly ask an agent to read, inspect, summarize, or reason
+  from host-local files remain blocked
+
 ## 0.1.28 - 2026-03-20
 
 ### OpenClaw Connector
