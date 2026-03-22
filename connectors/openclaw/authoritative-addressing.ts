@@ -1,9 +1,10 @@
 import type {
   AuthoritativeAddressingSignal,
-  OpenChatConversationContextMessage
+  ConnectorConversationContextMessage
 } from "./message-envelope.js";
 
 type DeliveryLike = {
+  channel_type?: string | null;
   message_id: string;
 };
 
@@ -15,10 +16,13 @@ type MessageLike = {
 export function resolveAuthoritativeAddressing(input: {
   delivery: DeliveryLike;
   message: MessageLike;
-  recentThreadContext: OpenChatConversationContextMessage[];
+  recentThreadContext: ConnectorConversationContextMessage[];
   recipientParticipantId: string;
 }) {
   const signals: AuthoritativeAddressingSignal[] = [];
+  if (input.delivery.channel_type === "direct_message") {
+    signals.push("direct_message_channel");
+  }
   if (Array.isArray(input.message.mentions)) {
     const normalizedMentions = new Set(
       input.message.mentions

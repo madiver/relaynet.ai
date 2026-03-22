@@ -843,6 +843,26 @@ describe("resolveAuthoritativeAddressing", () => {
     });
   });
 
+  it("treats a direct message channel as authoritatively addressed", () => {
+    expect(
+      resolveAuthoritativeAddressing({
+        delivery: {
+          channel_type: "direct_message",
+          message_id: "msg_dm"
+        },
+        message: {
+          mentions: [],
+          reply_to_message_id: null
+        },
+        recentThreadContext: [],
+        recipientParticipantId: "part_anne"
+      })
+    ).toEqual({
+      is_addressed: true,
+      signals: ["direct_message_channel"]
+    });
+  });
+
   it("does not treat a raw display-name prefix as deterministic addressing", () => {
     expect(
       resolveAuthoritativeAddressing({
@@ -867,64 +887,82 @@ describe("buildInboundEnvelope", () => {
   it("builds the canonical inbound JSON envelope", () => {
     const profile = loadConnectorPromptProfile();
     const envelope = buildInboundEnvelope({
-      authoritativeAddressing: {
-        is_addressed: true,
-        signals: ["mention_participant_id"]
-      },
       config: {
         openclawAgentId: "main",
         ownerPolicy: defaultOwnerPolicy,
         sensitiveRefusalMode: "refusal"
       },
-      delivery: {
-        channel_id: "chan_alpha_general",
-        delivery_id: "deliv_test",
-        delivery_sequence: 7,
-        message_id: "msg_test",
-        thread_id: "thr_test",
-        workspace_id: "ws_openchat"
-      },
-      message: {
-        body: { text: "Bit, can you take a look?" },
-        created_at: "2026-03-21T10:00:00.000Z",
-        message_id: "msg_test",
-        mentions: ["part_bit"],
-        reply_to_message_id: null,
+      promptProfile: profile,
+      serverEnvelope: {
+        authoritative_addressing: {
+          is_addressed: true,
+          signals: ["mention_participant_id"]
+        },
+        conversation: {
+          channel_display_name: "general",
+          channel_id: "chan_alpha_general",
+          channel_type: "public_group",
+          recent_channel_context: [
+            {
+              created_at: "2026-03-21T09:58:00.000Z",
+              message_id: "msg_context",
+              reply_to_message_id: null,
+              sender: {
+                display_name: "Quorra",
+                participant_id: "part_quorra",
+                participant_type: "agent"
+              },
+              text: "Constructive, but selective.",
+              thread_id: "thr_other"
+            }
+          ],
+          recent_thread_context: [
+            {
+              created_at: "2026-03-21T09:59:00.000Z",
+              message_id: "msg_prior",
+              reply_to_message_id: null,
+              sender: {
+                display_name: "Mark",
+                participant_id: "part_mark",
+                participant_type: "human"
+              },
+              text: "Bit, can you take a look?",
+              thread_id: "thr_test"
+            }
+          ],
+          workspace_display_name: "OpenChat",
+          workspace_id: "ws_openchat"
+        },
+        delivery: {
+          channel_id: "chan_alpha_general",
+          delivery_id: "deliv_test",
+          delivery_sequence: 7,
+          message_id: "msg_test",
+          received_at: "2026-03-21T10:00:05.000Z",
+          thread_id: "thr_test",
+          workspace_id: "ws_openchat"
+        },
+        event_type: "thread_delivery",
+        message: {
+          created_at: "2026-03-21T10:00:00.000Z",
+          mentions: ["part_bit"],
+          message_id: "msg_test",
+          reply_to_message_id: null,
+          text: "Bit, can you take a look?"
+        },
+        recipient: {
+          display_name: "Bit",
+          participant_id: "part_bit",
+          participant_type: "agent",
+          runtime_agent_id: "main"
+        },
+        schema_version: "openchat.server_inbound.v1",
         sender: {
           display_name: "Admin",
           participant_id: "part_admin",
           participant_type: "human"
         }
       },
-      promptProfile: profile,
-      recentChannelContext: [
-        {
-          created_at: "2026-03-21T09:58:00.000Z",
-          message_id: "msg_context",
-          reply_to_message_id: null,
-          sender: {
-            display_name: "Quorra",
-            participant_id: "part_quorra",
-            participant_type: "agent"
-          },
-          text: "Constructive, but selective.",
-          thread_id: "thr_other"
-        }
-      ],
-      recentThreadContext: [
-        {
-          created_at: "2026-03-21T09:59:00.000Z",
-          message_id: "msg_prior",
-          reply_to_message_id: null,
-          sender: {
-            display_name: "Mark",
-            participant_id: "part_mark",
-            participant_type: "human"
-          },
-          text: "Bit, can you take a look?",
-          thread_id: "thr_test"
-        }
-      ],
       state: {
         displayName: "Bit",
         ownerVerificationStatus: "verified_bound_human",

@@ -5,8 +5,9 @@ import path from "node:path";
 
 import type { OpenClawPluginApi, OpenClawPluginService } from "openclaw/plugin-sdk/core";
 import { resolveAuthoritativeAddressing } from "./authoritative-addressing.js";
-import { buildInboundEnvelope, toConversationContextMessages } from "./delivery-runtime.js";
+import { buildInboundEnvelope } from "./delivery-runtime.js";
 import { resolveInboundAddressing } from "./addressing-gate.js";
+import type { ConnectorServerInboundEnvelope } from "./message-envelope.js";
 import { loadConnectorPromptProfile } from "./prompt-profile.js";
 import { runParticipationGate } from "./participation-gate.js";
 import { runReplyGeneration } from "./reply-generation.js";
@@ -177,7 +178,12 @@ type StreamFrame =
       replay_mode?: "live_tail" | "pending" | "resume";
       type: "ready";
     }
-  | { delivery: OpenChatDeliveryRecord; message: OpenChatMessage; type: "delivery.item" }
+  | {
+      delivery: OpenChatDeliveryRecord;
+      inbound: ConnectorServerInboundEnvelope;
+      message: OpenChatMessage;
+      type: "delivery.item";
+    }
   | { acknowledged_at?: string; delivery_id?: string; type: "delivery.acknowledged" }
   | { message?: string; type: "error" }
   | { type: "ping" }
@@ -2160,33 +2166,15 @@ function createConnectorService(
       acknowledged = true;
     };
 
-    if (frame.message.sender?.participant_id === state.participantId) {
+    if (frame.inbound.sender.participant_id === state.participantId) {
       await acknowledgeAndAdvance();
       return;
     }
 
-    const promptContext = await loadPromptContext({
-      api,
-      delivery: frame.delivery,
-      message: frame.message,
-      state
-    });
-    const recentThreadContext = toConversationContextMessages(promptContext.recentThreadContext);
-    const recentChannelContext = toConversationContextMessages(promptContext.recentChannelContext);
-    const authoritativeAddressing = resolveAuthoritativeAddressing({
-      delivery: frame.delivery,
-      message: frame.message,
-      recentThreadContext,
-      recipientParticipantId: state.participantId
-    });
     const envelope = buildInboundEnvelope({
-      authoritativeAddressing,
       config,
-      delivery: frame.delivery,
-      message: frame.message,
       promptProfile,
-      recentChannelContext,
-      recentThreadContext,
+      serverEnvelope: frame.inbound,
       state
     });
 
@@ -2202,14 +2190,14 @@ function createConnectorService(
         `[openchat] blocked delivery ${frame.delivery.delivery_id} before normal execution: ${securityDecision.reason}`
       );
       const addressing =
-        authoritativeAddressing.is_addressed ||
+        envelope.authoritative_addressing.is_addressed ||
         securityDecision.decision === "deny_silent"
-          ? authoritativeAddressing.is_addressed
+          ? envelope.authoritative_addressing.is_addressed
             ? {
                 confidence: "high" as const,
                 decision: "addressed" as const,
                 reason: "structured routing facts show the message is addressed to the recipient",
-                signals: [...authoritativeAddressing.signals],
+                signals: [...envelope.authoritative_addressing.signals],
                 source: "authoritative" as const
               }
             : {
