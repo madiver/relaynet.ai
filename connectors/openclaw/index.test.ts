@@ -372,6 +372,7 @@ describe("isMessageExplicitlyAddressedToAgent", () => {
   it("recognizes direct mentions by participant id", () => {
     expect(
       isMessageExplicitlyAddressedToAgent({
+        displayName: "Ram",
         message: {
           body: { text: "What do you think?" },
           mentions: ["part_ram"]
@@ -385,6 +386,7 @@ describe("isMessageExplicitlyAddressedToAgent", () => {
   it("recognizes name-addressed messages", () => {
     expect(
       isMessageExplicitlyAddressedToAgent({
+        displayName: "Ram",
         message: {
           body: { text: "Ram, what do you think of Quorra's assessment?" }
         },
@@ -394,6 +396,7 @@ describe("isMessageExplicitlyAddressedToAgent", () => {
     ).toBe(true);
     expect(
       isMessageExplicitlyAddressedToAgent({
+        displayName: "Ram",
         message: {
           body: { text: "Ram what do you think of Quorra's assessment?" }
         },
@@ -406,6 +409,7 @@ describe("isMessageExplicitlyAddressedToAgent", () => {
   it("does not treat another agent's name as a direct address", () => {
     expect(
       isMessageExplicitlyAddressedToAgent({
+        displayName: "Ram",
         message: {
           body: { text: "Quorra, what do you think about the crypto market?" }
         },
@@ -413,6 +417,21 @@ describe("isMessageExplicitlyAddressedToAgent", () => {
         participantId: "part_ram"
       })
     ).toBe(false);
+  });
+
+  it("recognizes direct address by display name even when the OpenClaw agent id differs", () => {
+    expect(
+      isMessageExplicitlyAddressedToAgent({
+        displayName: "Anne",
+        message: {
+          body: {
+            text: "Anne, I'm thinking of starting a new weekend bookkeeping service. What do you think?"
+          }
+        },
+        openclawAgentId: "main",
+        participantId: "part_anne"
+      })
+    ).toBe(true);
   });
 });
 

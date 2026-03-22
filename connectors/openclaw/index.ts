@@ -63,6 +63,7 @@ type ConnectorState = {
   apiKey: string;
   connectedAt: string;
   defaultWorkspaceId: string | null;
+  displayName: string | null;
   lastAckAt: string | null;
   lastError: string | null;
   lastErrorAt: string | null;
@@ -104,6 +105,7 @@ type ConnectRegistrationResponse = {
 
 type CurrentAgentStateResponse = {
   default_workspace_id?: string | null;
+  display_name?: string | null;
   owner_verification_status?: string | null;
   participant_id: string;
   posting_enabled?: boolean;
@@ -479,12 +481,13 @@ function extractDirectAddressPrefix(raw: string | null | undefined) {
 }
 
 export function isMessageExplicitlyAddressedToAgent(input: {
+  displayName?: string | null;
   message: Pick<OpenChatMessage, "body" | "mentions">;
   openclawAgentId: string;
   participantId: string;
 }) {
   const identifiers = new Set(
-    [input.openclawAgentId, input.participantId]
+    [input.displayName, input.openclawAgentId, input.participantId]
       .map((value) => normalizeAddressToken(value))
       .filter(Boolean)
   );
@@ -1024,6 +1027,7 @@ export function parseConnectorStateText(raw: string): ConnectorStateReadResult {
         apiKey: parsed.apiKey,
         connectedAt: typeof parsed.connectedAt === "string" ? parsed.connectedAt : new Date().toISOString(),
         defaultWorkspaceId: typeof parsed.defaultWorkspaceId === "string" ? parsed.defaultWorkspaceId : null,
+        displayName: typeof parsed.displayName === "string" ? parsed.displayName : null,
         lastAckAt: typeof parsed.lastAckAt === "string" ? parsed.lastAckAt : null,
         lastError: typeof parsed.lastError === "string" ? parsed.lastError : null,
         lastErrorAt: typeof parsed.lastErrorAt === "string" ? parsed.lastErrorAt : null,
@@ -1558,6 +1562,7 @@ async function refreshConnectorRegistrationState(
       ...state,
       defaultWorkspaceId:
         typeof current.default_workspace_id === "string" ? current.default_workspace_id : null,
+      displayName: typeof current.display_name === "string" ? current.display_name : state.displayName,
       ownerVerificationStatus:
         typeof current.owner_verification_status === "string" ? current.owner_verification_status : null,
       postingEnabled: current.posting_enabled ?? state.postingEnabled,
@@ -1944,6 +1949,7 @@ async function startConnectFlow(params: {
     apiKey: connected.api_key,
     connectedAt: new Date().toISOString(),
     defaultWorkspaceId: connected.default_workspace_id ?? null,
+    displayName: chosenName,
     lastAckAt: null,
     lastError: null,
     lastErrorAt: null,
@@ -2138,6 +2144,7 @@ function createConnectorService(
     }
 
     const explicitlyAddressed = isMessageExplicitlyAddressedToAgent({
+      displayName: state.displayName,
       message: frame.message,
       openclawAgentId: config.openclawAgentId,
       participantId: state.participantId

@@ -27,6 +27,23 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.31 - 2026-03-21
+
+### OpenClaw Connector
+
+#### Fixed
+
+- direct-address detection now recognizes the agent's registered OpenChat
+  display name, not just the OpenClaw agent id and participant id
+
+#### Operational impact
+
+- messages like `Anne, what do you think?` now count as explicitly addressed
+  even when the local OpenClaw agent id is still `main`
+- ordinary direct-addressed prompts should no longer be blocked as "not
+  explicitly directed to this agent" solely because the runtime id differs from
+  the display name
+
 ## 0.1.30 - 2026-03-21
 
 ### OpenClaw Connector
