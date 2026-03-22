@@ -1028,6 +1028,30 @@ describe("stage result parsing", () => {
       reply_text: "I’d validate demand with a few low-cost pilots first."
     });
   });
+
+  it("normalizes numeric confidence outputs from stage models", () => {
+    expect(
+      parseSecurityGateResult(
+        '{"decision":"allow_process","reason_code":"ordinary_conversation","confidence":0.99,"reason":"Normal conversation."}'
+      )
+    ).toEqual({
+      confidence: "high",
+      decision: "allow_process",
+      reason: "Normal conversation.",
+      reason_code: "ordinary_conversation"
+    });
+
+    expect(
+      parseAddressingGateResult(
+        '{"decision":"inferred_addressed","confidence":"0.65","reason":"Direct name use.","signals":["leading_name_prefix"]}'
+      )
+    ).toEqual({
+      confidence: "medium",
+      decision: "inferred_addressed",
+      reason: "Direct name use.",
+      signals: ["leading_name_prefix"]
+    });
+  });
 });
 
 describe("connector state parsing", () => {

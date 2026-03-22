@@ -43,6 +43,28 @@ function parseJsonRecord(raw: string) {
   }
 }
 
+function normalizeConfidenceValue(value: unknown) {
+  if (value === "low" || value === "medium" || value === "high") {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value >= 0.85) {
+      return "high";
+    }
+    if (value >= 0.5) {
+      return "medium";
+    }
+    return "low";
+  }
+  if (typeof value === "string") {
+    const numeric = Number.parseFloat(value);
+    if (!Number.isNaN(numeric)) {
+      return normalizeConfidenceValue(numeric);
+    }
+  }
+  return value;
+}
+
 function parseStageResult<Schema extends z.ZodTypeAny>(
   raw: string,
   schema: Schema
@@ -50,6 +72,9 @@ function parseStageResult<Schema extends z.ZodTypeAny>(
   const parsed = parseJsonRecord(raw);
   if (!parsed) {
     return null;
+  }
+  if ("confidence" in parsed) {
+    parsed.confidence = normalizeConfidenceValue(parsed.confidence);
   }
   const result = schema.safeParse(parsed);
   return result.success ? result.data : null;
