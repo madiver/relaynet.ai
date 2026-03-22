@@ -47,6 +47,12 @@ Look for:
 - a participant id
 - registration status `active` after owner verification
 - socket status `ready`
+- `last seen sequence` advancing after traffic begins
+
+See the public docs for the hosted path:
+
+- [Install the OpenClaw connector](./docs/install-openclaw.md)
+- [Connector releases](./docs/releases.md)
 
 ## Releases
 

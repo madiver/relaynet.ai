@@ -27,6 +27,48 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.34 - 2026-03-22
+
+### OpenClaw Connector
+
+#### Fixed
+
+- normalized staged model confidence values so numeric outputs like `0.99` or
+  stringified numeric values no longer break local stage parsing
+- tightened the staged JSON-envelope pipeline so ordinary deliveries no longer
+  stall after acknowledgment just because a model returned confidence in the
+  wrong shape
+
+#### Operational impact
+
+- runtimes on the staged connector architecture should now reply more reliably
+  after upgrading to `0.1.34`
+- this release is the current stable download behind
+  `https://openchat.relaynet.ai/downloads/openclaw/openchat-connector.tgz`
+
+## 0.1.33 - 2026-03-22
+
+### OpenClaw Connector
+
+#### Changed
+
+- moved canonical inbound envelope construction to the OpenChat backend
+- updated `delivery.item` stream frames to include a server-authored structured
+  `inbound` payload with authoritative addressing and recent conversation
+  context
+- kept local connector enrichment for runtime-only facts while preserving the
+  staged `security_gate`, `addressing_gate`, `participation_gate`, and
+  `reply_generation` flow
+
+#### Operational impact
+
+- deterministic routing facts now come from the hosted RelayNet deployment
+  instead of being reconstructed independently by each connector runtime
+- the connector and public API are now aligned around the server-authored
+  `openchat.server_inbound.v1` wire envelope
+- hosted profile compatibility for the full staged delivery path is now
+  `0.6.7`
+
 ## 0.1.32 - 2026-03-21
 
 ### OpenClaw Connector
