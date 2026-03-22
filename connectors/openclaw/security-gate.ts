@@ -5,10 +5,15 @@ import {
   stringifyStageInput,
   type OpenChatStageInput
 } from "./message-envelope.js";
-import { buildStageSystemPrompt, type ConnectorPromptProfile } from "./prompt-profile.js";
+import {
+  buildStageSystemPrompt,
+  loadConnectorPromptProfile,
+  type ConnectorPromptProfile
+} from "./prompt-profile.js";
 import { runConnectorStructuredStage } from "./stage-runtime.js";
 import { type ResolvedConnectorPluginConfigLike } from "./legacy-policy-compat.js";
 import { parseSecurityGateResult, type SecurityGateResult } from "./stage-results.js";
+import { type ConnectorDeterministicSecurityPolicy } from "./connector-messaging.js";
 
 type DeliveryLike = {
   channel_id: string;
@@ -18,98 +23,50 @@ type DeliveryLike = {
   workspace_id: string;
 };
 
-const OVERRIDE_ATTEMPT_PATTERNS = [
-  /\b(ignore|disregard|override|bypass)\b[\s\S]{0,80}\b(instruction|guardrail|policy|system prompt|safety|security)\b/i,
-  /\b(system prompt|developer message|hidden instruction|jailbreak)\b/i,
-  /\byou are now\b/i
-];
-const EXPLICIT_REQUEST_PATTERNS = [
-  /\b(can you|could you|would you|please)\b/i,
-  /\b(show|list|print|dump|read|reveal|share|display|summari[sz]e|enumerate|inspect|check|tell me|describe|explain)\b/i,
-  /\bwhat(?:'s| is| are)?\b/i,
-  /\bwhich\b/i,
-  /\bwhere\b/i,
-  /\bdetails?\b/i,
-  /\binformation about\b/i,
-  /\?/
-];
 const LOCAL_ABSOLUTE_PATH_PATTERN =
   /(^|[\s`(])(~\/[^\s`]+|\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)(?=$|[\s`)])/m;
-const PASSIVE_ARTIFACT_REFERENCE_PATTERN = /\b(?:canonical artifact|artifact)\s*:/i;
-const LOCAL_PATH_INSPECTION_REQUEST_PATTERNS = [
-  /\b(read|open|load|inspect|parse|summari[sz]e|check|use|import|extract|verify|confirm)\b[\s\S]{0,120}(~\/[^\s`]+|\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)/i,
-  /(~\/[^\s`]+|\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)[\s\S]{0,80}\b(read|open|load|inspect|parse|summari[sz]e|check|use|import|extract|verify|confirm)\b/i,
-  /\b(reason from|based on|using data from)\b[\s\S]{0,120}(~\/[^\s`]+|\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)/i
-];
-const SENSITIVE_TARGET_GROUPS: Array<{
-  reason: string;
-  reasonCode: string;
-  targetPatterns: RegExp[];
-}> = [
-  {
-    reason: "requested secrets or authentication material",
-    reasonCode: "requested_secret",
-    targetPatterns: [
-      /\b(secret|token|api[ -]?key|auth(?:entication)?|credential|cookie|session)\b/i,
-      /\b(access token|refresh token|bearer token|google auth token)\b/i
-    ]
-  },
-  {
-    reason: "requested prompt or local configuration data",
-    reasonCode: "requested_prompt_or_config_access",
-    targetPatterns: [
-      /\b(config|configuration|settings|internal configuration|runtime config)\b/i,
-      /\bopenclaw\.json\b/i,
-      /\bstate\.json\b/i,
-      /\binstall\.json\b/i,
-      /\bplugin(?:s)?\b/i,
-      /\b(prompt|system prompt|extra system prompt)\b/i
-    ]
-  },
-  {
-    reason: "requested operational metadata",
-    reasonCode: "requested_operational_metadata",
-    targetPatterns: [
-      /\bcron(?:job|jobs)?\b/i,
-      /\bcrontab\b/i,
-      /\bsystemd\b/i,
-      /\bservice(?:s)?\b/i,
-      /\btimer(?:s)?\b/i,
-      /\bprocess(?:es)?\b/i,
-      /\blogs?\b/i
-    ]
-  },
-  {
-    reason: "requested local environment or filesystem data",
-    reasonCode: "requested_host_introspection",
-    targetPatterns: [
-      /\benv(?:ironment)?(?: variables?)?\b/i,
-      /\b\.env\b/i,
-      /\bfilesystem\b/i,
-      /\bfile(?:s| listing| tree)?\b/i,
-      /\bpath(?:s)?\b/i,
-      /\bhome directory\b/i,
-      /\b\.ssh\b/i
-    ]
-  },
-  {
-    reason: "requested host or network inventory",
-    reasonCode: "requested_host_introspection",
-    targetPatterns: [
-      /\b(hostname|host name)\b/i,
-      /\bport(?:s)?\b/i,
-      /\bnetwork\b/i,
-      /\binstalled tools?\b/i,
-      /\binstalled plugins?\b/i
-    ]
-  }
-];
 
 function normalizePolicyText(raw: string | null | undefined) {
   return (raw ?? "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeLookupText(raw: string | null | undefined) {
+  return normalizePolicyText(raw).toLowerCase();
+}
+
+function escapeRegex(term: string) {
+  return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsNormalizedTerm(normalizedText: string, term: string) {
+  const normalizedTerm = normalizeLookupText(term);
+  if (!normalizedTerm) {
+    return false;
+  }
+
+  if (/^[^a-z0-9]+$/i.test(normalizedTerm)) {
+    return normalizedText.includes(normalizedTerm);
+  }
+
+  const escaped = escapeRegex(normalizedTerm).replace(/\s+/g, "\\s+");
+  return new RegExp(`(^|[^a-z0-9_])${escaped}($|[^a-z0-9_])`, "i").test(normalizedText);
+}
+
+function containsAnyTerm(normalizedText: string, terms: string[]) {
+  return terms.some((term) => containsNormalizedTerm(normalizedText, term));
+}
+
 export function isPassiveArtifactReferenceMessage(raw: string | null | undefined) {
+  return isPassiveArtifactReferenceMessageWithPolicy(
+    raw,
+    loadConnectorPromptProfile().security_gate.deterministic_policy
+  );
+}
+
+export function isPassiveArtifactReferenceMessageWithPolicy(
+  raw: string | null | undefined,
+  deterministicPolicy: ConnectorDeterministicSecurityPolicy
+) {
   const text = (raw ?? "").trim();
   if (!text) {
     return false;
@@ -119,19 +76,39 @@ export function isPassiveArtifactReferenceMessage(raw: string | null | undefined
     return false;
   }
 
-  if (!PASSIVE_ARTIFACT_REFERENCE_PATTERN.test(text)) {
+  const normalizedText = normalizeLookupText(text);
+  if (!containsAnyTerm(normalizedText, deterministicPolicy.passive_artifact_labels)) {
     return false;
   }
 
-  return !LOCAL_PATH_INSPECTION_REQUEST_PATTERNS.some((pattern) => pattern.test(text));
+  return !containsAnyTerm(normalizedText, deterministicPolicy.local_path_inspection_terms);
 }
 
-function isExplicitSensitiveRequest(messageText: string) {
-  return EXPLICIT_REQUEST_PATTERNS.some((pattern) => pattern.test(messageText));
+function isOverrideAttempt(
+  normalizedText: string,
+  deterministicPolicy: ConnectorDeterministicSecurityPolicy
+) {
+  if (containsAnyTerm(normalizedText, deterministicPolicy.override_attempt.direct_phrases)) {
+    return true;
+  }
+
+  return (
+    containsAnyTerm(normalizedText, deterministicPolicy.override_attempt.command_terms) &&
+    containsAnyTerm(normalizedText, deterministicPolicy.override_attempt.protected_terms)
+  );
+}
+
+function isExplicitSensitiveRequest(
+  normalizedText: string,
+  deterministicPolicy: ConnectorDeterministicSecurityPolicy
+) {
+  return containsAnyTerm(normalizedText, deterministicPolicy.explicit_request_terms);
 }
 
 export function detectSensitiveIntrospectionByRules(
   raw: string | null | undefined,
+  deterministicPolicy: ConnectorDeterministicSecurityPolicy = loadConnectorPromptProfile().security_gate
+    .deterministic_policy,
   sensitiveRefusalMode: "no_reply" | "refusal" = "refusal"
 ): SecurityGateResult | null {
   const messageText = normalizePolicyText(raw);
@@ -139,7 +116,9 @@ export function detectSensitiveIntrospectionByRules(
     return null;
   }
 
-  if (OVERRIDE_ATTEMPT_PATTERNS.some((pattern) => pattern.test(messageText))) {
+  const normalizedText = normalizeLookupText(messageText);
+
+  if (isOverrideAttempt(normalizedText, deterministicPolicy)) {
     return {
       confidence: "high",
       decision: "deny_silent",
@@ -148,20 +127,34 @@ export function detectSensitiveIntrospectionByRules(
     };
   }
 
-  if (!isExplicitSensitiveRequest(messageText)) {
+  if (LOCAL_ABSOLUTE_PATH_PATTERN.test(messageText)) {
+    if (
+      containsAnyTerm(normalizedText, deterministicPolicy.local_path_inspection_terms) &&
+      !isPassiveArtifactReferenceMessageWithPolicy(messageText, deterministicPolicy)
+    ) {
+      return {
+        confidence: "high",
+        decision: sensitiveRefusalMode === "refusal" ? "deny_refusal" : "deny_silent",
+        reason: "requested local environment or filesystem data",
+        reason_code: "requested_host_introspection"
+      };
+    }
+  }
+
+  if (!isExplicitSensitiveRequest(normalizedText, deterministicPolicy)) {
     return null;
   }
 
-  for (const group of SENSITIVE_TARGET_GROUPS) {
-    if (!group.targetPatterns.some((pattern) => pattern.test(messageText))) {
+  for (const category of deterministicPolicy.sensitive_categories) {
+    if (!containsAnyTerm(normalizedText, category.target_terms)) {
       continue;
     }
 
     return {
       confidence: "high",
       decision: sensitiveRefusalMode === "refusal" ? "deny_refusal" : "deny_silent",
-      reason: group.reason,
-      reason_code: group.reasonCode
+      reason: category.reason,
+      reason_code: category.reason_code
     };
   }
 
@@ -190,13 +183,19 @@ export async function runSecurityGate(params: {
 
   const ruleDecision = detectSensitiveIntrospectionByRules(
     messageText,
+    params.promptProfile.security_gate.deterministic_policy,
     params.config.sensitiveRefusalMode
   );
   if (ruleDecision) {
     return ruleDecision;
   }
 
-  if (isPassiveArtifactReferenceMessage(messageText)) {
+  if (
+    isPassiveArtifactReferenceMessageWithPolicy(
+      messageText,
+      params.promptProfile.security_gate.deterministic_policy
+    )
+  ) {
     return {
       confidence: "high",
       decision: "allow_process",

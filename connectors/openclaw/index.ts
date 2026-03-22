@@ -11,7 +11,11 @@ import type { ConnectorServerInboundEnvelope } from "./message-envelope.js";
 import { loadConnectorPromptProfile } from "./prompt-profile.js";
 import { runParticipationGate } from "./participation-gate.js";
 import { runReplyGeneration } from "./reply-generation.js";
-import { runSecurityGate } from "./security-gate.js";
+import {
+  detectSensitiveIntrospectionByRules as detectSensitiveIntrospectionByRulesFromSecurityGate,
+  isPassiveArtifactReferenceMessage as isPassiveArtifactReferenceMessageFromSecurityGate,
+  runSecurityGate
+} from "./security-gate.js";
 import {
   CONNECTOR_CAPABILITIES,
   formatOwnerPolicySummaryLines,
@@ -445,20 +449,7 @@ function normalizePolicyText(raw: string | null | undefined) {
 }
 
 export function isPassiveArtifactReferenceMessage(raw: string | null | undefined) {
-  const text = (raw ?? "").trim();
-  if (!text) {
-    return false;
-  }
-
-  if (!LOCAL_ABSOLUTE_PATH_PATTERN.test(text)) {
-    return false;
-  }
-
-  if (!PASSIVE_ARTIFACT_REFERENCE_PATTERN.test(text)) {
-    return false;
-  }
-
-  return !LOCAL_PATH_INSPECTION_REQUEST_PATTERNS.some((pattern) => pattern.test(text));
+  return isPassiveArtifactReferenceMessageFromSecurityGate(raw);
 }
 
 function normalizeAddressToken(raw: string | null | undefined) {
@@ -530,36 +521,39 @@ function isExplicitSensitiveRequest(messageText: string) {
 
 export function detectSensitiveIntrospectionByRules(
   raw: string | null | undefined,
+  sensitiveRefusalMode?: "no_reply" | "refusal"
+): InboundPolicyDecision | null;
+export function detectSensitiveIntrospectionByRules(
+  raw: string | null | undefined,
+  deterministicPolicy: Parameters<typeof detectSensitiveIntrospectionByRulesFromSecurityGate>[1],
+  sensitiveRefusalMode?: "no_reply" | "refusal"
+): ReturnType<typeof detectSensitiveIntrospectionByRulesFromSecurityGate>;
+export function detectSensitiveIntrospectionByRules(
+  raw: string | null | undefined,
+  deterministicPolicyOrMode?: Parameters<typeof detectSensitiveIntrospectionByRulesFromSecurityGate>[1] | "no_reply" | "refusal",
   sensitiveRefusalMode: "no_reply" | "refusal" = "refusal"
-): InboundPolicyDecision | null {
-  const messageText = normalizePolicyText(raw);
-  if (!messageText) {
-    return null;
-  }
-
-  if (OVERRIDE_ATTEMPT_PATTERNS.some((pattern) => pattern.test(messageText))) {
-    return {
-      action: "deny_no_reply",
-      reason: "attempted to override local connector guardrails"
-    };
-  }
-
-  if (!isExplicitSensitiveRequest(messageText)) {
-    return null;
-  }
-
-  for (const group of SENSITIVE_TARGET_GROUPS) {
-    if (!group.targetPatterns.some((pattern) => pattern.test(messageText))) {
-      continue;
+) {
+  if (deterministicPolicyOrMode === "no_reply" || deterministicPolicyOrMode === "refusal") {
+    const result = detectSensitiveIntrospectionByRulesFromSecurityGate(
+      raw,
+      undefined,
+      deterministicPolicyOrMode
+    );
+    if (!result) {
+      return null;
     }
 
     return {
-      action: sensitiveRefusalMode === "refusal" ? "deny_refusal" : "deny_no_reply",
-      reason: group.reason
+      action: result.decision === "deny_refusal" ? "deny_refusal" : "deny_no_reply",
+      reason: result.reason
     };
   }
 
-  return null;
+  return detectSensitiveIntrospectionByRulesFromSecurityGate(
+    raw,
+    deterministicPolicyOrMode,
+    sensitiveRefusalMode
+  );
 }
 
 function buildPolicyGuardrailPrompt(messageText: string) {

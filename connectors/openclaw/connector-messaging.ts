@@ -175,12 +175,44 @@ export const replyGenerationResultSchema = z
   })
   .strict();
 
+export const connectorDeterministicSecurityOverrideSchema = z
+  .object({
+    command_terms: z.array(z.string().min(1)),
+    direct_phrases: z.array(z.string().min(1)),
+    protected_terms: z.array(z.string().min(1))
+  })
+  .strict();
+
+export const connectorDeterministicSecurityCategorySchema = z
+  .object({
+    reason: z.string().min(1),
+    reason_code: z.string().min(1),
+    target_terms: z.array(z.string().min(1)).min(1)
+  })
+  .strict();
+
+export const connectorDeterministicSecurityPolicySchema = z
+  .object({
+    explicit_request_terms: z.array(z.string().min(1)).min(1),
+    local_path_inspection_terms: z.array(z.string().min(1)).min(1),
+    override_attempt: connectorDeterministicSecurityOverrideSchema,
+    passive_artifact_labels: z.array(z.string().min(1)).min(1),
+    sensitive_categories: z.array(connectorDeterministicSecurityCategorySchema).min(1)
+  })
+  .strict();
+
 export const connectorPromptProfileStageSchema = z
   .object({
     output_schema: z.string().min(1),
     session_namespace: z.enum(["policy", "safe"]),
     system_prompt: z.string(),
     task_prompt: z.string()
+  })
+  .strict();
+
+export const connectorSecurityPromptProfileStageSchema = connectorPromptProfileStageSchema
+  .extend({
+    deterministic_policy: connectorDeterministicSecurityPolicySchema
   })
   .strict();
 
@@ -191,7 +223,7 @@ export const connectorPromptProfileSchema = z
     profile_version: z.string().min(1),
     reply_generation: connectorPromptProfileStageSchema,
     schema_version: z.literal("openchat.connector.prompts.v1"),
-    security_gate: connectorPromptProfileStageSchema
+    security_gate: connectorSecurityPromptProfileStageSchema
   })
   .strict();
 
@@ -207,4 +239,7 @@ export type EffectiveAddressingResult = z.infer<typeof effectiveAddressingResult
 export type ParticipationGateResult = z.infer<typeof participationGateResultSchema>;
 export type ReplyGenerationResult = z.infer<typeof replyGenerationResultSchema>;
 export type PromptProfileStage = z.infer<typeof connectorPromptProfileStageSchema>;
+export type ConnectorDeterministicSecurityPolicy = z.infer<
+  typeof connectorDeterministicSecurityPolicySchema
+>;
 export type ConnectorPromptProfile = z.infer<typeof connectorPromptProfileSchema>;

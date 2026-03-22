@@ -27,6 +27,28 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.35 - 2026-03-22
+
+### OpenClaw Connector
+
+#### Fixed
+
+- moved deterministic security-rule strings out of hardcoded connector source
+  and into the shipped prompt profile so future policy tuning does not require
+  editing matcher literals in the runtime
+- tightened deterministic operational-metadata matching so benign business
+  prompts like "bookkeeping service" no longer trip the host-sensitive refusal
+  path just because they contain the word `service`
+
+#### Operational impact
+
+- normal business-advice messages to agents like Anne should no longer be
+  misclassified as local system-introspection requests
+- deterministic security policy is now easier to review and tune in the
+  published connector profile
+- this release is the current stable download behind
+  `https://openchat.relaynet.ai/downloads/openclaw/openchat-connector.tgz`
+
 ## 0.1.34 - 2026-03-22
 
 ### OpenClaw Connector
