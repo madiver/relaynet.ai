@@ -4,7 +4,13 @@ import os from "node:os";
 import path from "node:path";
 
 import type { OpenClawPluginApi, OpenClawPluginService } from "openclaw/plugin-sdk/core";
-import { buildInboundPrompt } from "./inbound-prompt.js";
+import { resolveAuthoritativeAddressing } from "./authoritative-addressing.js";
+import { buildInboundEnvelope, toConversationContextMessages } from "./delivery-runtime.js";
+import { resolveInboundAddressing } from "./addressing-gate.js";
+import { loadConnectorPromptProfile } from "./prompt-profile.js";
+import { runParticipationGate } from "./participation-gate.js";
+import { runReplyGeneration } from "./reply-generation.js";
+import { runSecurityGate } from "./security-gate.js";
 import {
   CONNECTOR_CAPABILITIES,
   formatOwnerPolicySummaryLines,
@@ -219,6 +225,7 @@ type PromptContextMessage = {
   messageId: string;
   replyToMessageId: string | null;
   senderName: string;
+  senderParticipantId: string | null;
   senderType: string;
   text: string;
   threadId: string;
@@ -424,10 +431,7 @@ function normalizeStreamUrl(raw: string | null | undefined): string | null {
 }
 
 export function buildOpenChatExtraSystemPrompt(raw: string | null | undefined): string {
-  const trimmed = typeof raw === "string" ? raw.trim() : "";
-  return trimmed
-    ? `${DEFAULT_OPENCHAT_GUARDRAIL_PROMPT}\n\nAdditional local instructions:\n${trimmed}`
-    : DEFAULT_OPENCHAT_GUARDRAIL_PROMPT;
+  return typeof raw === "string" ? raw.trim() : "";
 }
 
 function normalizePolicyText(raw: string | null | undefined) {
@@ -1672,6 +1676,8 @@ function toPromptContextMessages(
       replyToMessageId:
         typeof message.reply_to_message_id === "string" ? message.reply_to_message_id : null,
       senderName: message.sender?.display_name?.trim() || "Unknown sender",
+      senderParticipantId:
+        typeof message.sender?.participant_id === "string" ? message.sender.participant_id : null,
       senderType: message.sender?.participant_type?.trim() || "participant",
       text,
       threadId: message.thread_id
@@ -2100,7 +2106,6 @@ export {
   shouldActivateConnectorServiceForProcess
 } from "./service-activation.js";
 export {
-  buildInboundPrompt,
   evaluateRestrictedOpenChatToolCall,
   isRestrictedOpenChatSessionKey,
   shouldBlockToolForRestrictedOpenChatSession
@@ -2111,6 +2116,22 @@ export {
   policyAllowsCapability,
   resolveConnectorOwnerPolicy
 } from "./owner-policy.js";
+export { resolveAuthoritativeAddressing } from "./authoritative-addressing.js";
+export { buildInboundEnvelope } from "./delivery-runtime.js";
+export { loadConnectorPromptProfile } from "./prompt-profile.js";
+export { runParticipationGate } from "./participation-gate.js";
+export { runReplyGeneration } from "./reply-generation.js";
+export { runSecurityGate } from "./security-gate.js";
+export {
+  authoritativeAddressingResult,
+  resolveInboundAddressing
+} from "./addressing-gate.js";
+export {
+  parseAddressingGateResult,
+  parseParticipationGateResult,
+  parseReplyGenerationResult,
+  parseSecurityGateResult
+} from "./stage-results.js";
 
 function createConnectorService(
   api: OpenClawPluginApi,
@@ -2120,6 +2141,7 @@ function createConnectorService(
   let loopPromise: Promise<void> | null = null;
   let activeSocket: OpenChatWebSocket | null = null;
   let lastStateReadError: string | null = null;
+  const promptProfile = loadConnectorPromptProfile();
 
   const processDelivery = async (
     state: ConnectorState,
@@ -2143,34 +2165,71 @@ function createConnectorService(
       return;
     }
 
-    const explicitlyAddressed = isMessageExplicitlyAddressedToAgent({
-      displayName: state.displayName,
+    const promptContext = await loadPromptContext({
+      api,
+      delivery: frame.delivery,
       message: frame.message,
-      openclawAgentId: config.openclawAgentId,
-      participantId: state.participantId
+      state
     });
-    if (config.ownerPolicy.replyMode === "direct_only" && !explicitlyAddressed) {
-      api.logger.info(
-        `[openchat] skipping delivery ${frame.delivery.delivery_id} because owner policy requires direct address`
-      );
-      await acknowledgeAndAdvance();
-      return;
-    }
+    const recentThreadContext = toConversationContextMessages(promptContext.recentThreadContext);
+    const recentChannelContext = toConversationContextMessages(promptContext.recentChannelContext);
+    const authoritativeAddressing = resolveAuthoritativeAddressing({
+      delivery: frame.delivery,
+      message: frame.message,
+      recentThreadContext,
+      recipientParticipantId: state.participantId
+    });
+    const envelope = buildInboundEnvelope({
+      authoritativeAddressing,
+      config,
+      delivery: frame.delivery,
+      message: frame.message,
+      promptProfile,
+      recentChannelContext,
+      recentThreadContext,
+      state
+    });
 
-    const policyDecision = await classifyInboundOpenChatRequest({
+    const securityDecision = await runSecurityGate({
       api,
       config,
       delivery: frame.delivery,
-      message: frame.message
+      envelope,
+      promptProfile
     });
-    if (policyDecision.action !== "allow_chat_reply") {
+    if (securityDecision.decision !== "allow_process") {
       api.logger.warn(
-        `[openchat] blocked delivery ${frame.delivery.delivery_id} before normal execution: ${policyDecision.reason}`
+        `[openchat] blocked delivery ${frame.delivery.delivery_id} before normal execution: ${securityDecision.reason}`
       );
+      const addressing =
+        authoritativeAddressing.is_addressed ||
+        securityDecision.decision === "deny_silent"
+          ? authoritativeAddressing.is_addressed
+            ? {
+                confidence: "high" as const,
+                decision: "addressed" as const,
+                reason: "structured routing facts show the message is addressed to the recipient",
+                signals: [...authoritativeAddressing.signals],
+                source: "authoritative" as const
+              }
+            : {
+                confidence: "high" as const,
+                decision: "not_addressed" as const,
+                reason: "no authoritative addressing was present",
+                signals: [],
+                source: "authoritative" as const
+              }
+          : await resolveInboundAddressing({
+              api,
+              delivery: frame.delivery,
+              envelope,
+              openclawAgentId: config.openclawAgentId,
+              promptProfile
+            });
       const shouldPostSensitiveRefusal =
-        policyDecision.action === "deny_refusal" &&
+        securityDecision.decision === "deny_refusal" &&
         state.postingEnabled &&
-        explicitlyAddressed;
+        addressing.decision === "addressed";
       if (shouldPostSensitiveRefusal) {
         try {
           await sendReply({
@@ -2186,7 +2245,7 @@ function createConnectorService(
             }`
           );
         }
-      } else if (policyDecision.action === "deny_refusal") {
+      } else if (securityDecision.decision === "deny_refusal") {
         api.logger.info(
           `[openchat] withholding sensitive-introspection refusal for ${frame.delivery.delivery_id} because the message was not explicitly directed to this agent`
         );
@@ -2196,54 +2255,49 @@ function createConnectorService(
     }
 
     try {
-      const sessionKey = buildOpenChatSessionKey(config, frame.delivery);
-      const beforeMessages = await api.runtime.subagent.getSessionMessages({
-        limit: 8,
-        sessionKey
-      });
-      const beforeText = normalizeOutboundReplyForOpenChat(
-        latestAssistantText(beforeMessages.messages)
-      );
-      const promptContext = await loadPromptContext({
+      const addressing = await resolveInboundAddressing({
         api,
         delivery: frame.delivery,
-        message: frame.message,
-        state
+        envelope,
+        openclawAgentId: config.openclawAgentId,
+        promptProfile
       });
-      const run = await api.runtime.subagent.run({
-        extraSystemPrompt: config.extraSystemPrompt ?? undefined,
-        idempotencyKey: `openchat-delivery:${frame.delivery.delivery_id}`,
-        message: buildInboundPrompt({
-          ...frame,
-          explicitlyAddressed,
-          ownerPolicy: config.ownerPolicy,
-          recentChannelContext: promptContext.recentChannelContext,
-          recentThreadContext: promptContext.recentThreadContext
-        }),
-        sessionKey
+      const participation = await runParticipationGate({
+        api,
+        addressing,
+        delivery: frame.delivery,
+        envelope,
+        openclawAgentId: config.openclawAgentId,
+        promptProfile
       });
-      const wait = await api.runtime.subagent.waitForRun({
-        runId: run.runId,
-        timeoutMs: RUN_TIMEOUT_MS
-      });
-      if (wait.status !== "ok") {
-        throw new Error(wait.error ?? `Agent run failed with status ${wait.status}`);
+      if (participation.decision !== "reply") {
+        api.logger.info(
+          `[openchat] not replying to ${frame.delivery.delivery_id}: ${participation.reason}`
+        );
+        return;
       }
 
-      const afterMessages = await api.runtime.subagent.getSessionMessages({
-        limit: 10,
-        sessionKey
+      const reply = await runReplyGeneration({
+        addressing,
+        api,
+        delivery: frame.delivery,
+        envelope,
+        extraInstructions: config.extraSystemPrompt,
+        openclawAgentId: config.openclawAgentId,
+        participation,
+        promptProfile
       });
-      const afterText = normalizeOutboundReplyForOpenChat(
-        latestAssistantText(afterMessages.messages)
-      );
-      if (afterText && afterText !== beforeText) {
+      if (reply.decision === "reply" && reply.reply_text) {
         await sendReply({
           delivery: frame.delivery,
           message: frame.message,
           state,
-          text: afterText
+          text: reply.reply_text
         });
+      } else {
+        api.logger.info(
+          `[openchat] reply generation chose silence for ${frame.delivery.delivery_id}: ${reply.reason}`
+        );
       }
     } catch (error) {
       api.logger.warn(

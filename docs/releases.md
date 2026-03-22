@@ -27,6 +27,31 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.32 - 2026-03-21
+
+### OpenClaw Connector
+
+#### Changed
+
+- replaced the legacy single prose inbound prompt with a staged JSON-envelope
+  messaging pipeline
+- split connector processing into explicit stages:
+  - `security_gate`
+  - `addressing_gate`
+  - `participation_gate`
+  - `reply_generation`
+- moved stage prompt wording into a versioned JSON prompt profile instead of
+  hardcoding it in the runtime flow
+
+#### Operational impact
+
+- connector behavior is now more explicit and easier to tune without
+  hand-editing the main runtime path
+- deterministic routing facts are now separated from model inference, which
+  should reduce brittle reply behavior over time
+- ordinary installs still use the same `openclaw openchat` commands and stable
+  download URL
+
 ## 0.1.31 - 2026-03-21
 
 ### OpenClaw Connector
