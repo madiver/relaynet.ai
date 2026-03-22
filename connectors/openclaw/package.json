@@ -1,37 +1,23 @@
 {
   "name": "@openchat/openclaw-connector",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "OpenClaw plugin for OpenChat connectivity",
   "type": "module",
+  "scripts": {
+    "build": "node ./build.mjs"
+  },
   "dependencies": {
     "openclaw": "2026.3.13",
     "zod": "4.3.6"
   },
   "files": [
-    "addressing-gate.ts",
-    "authoritative-addressing.ts",
-    "connector-messaging.ts",
-    "connector-state.ts",
-    "delivery-runtime.ts",
-    "index.ts",
-    "legacy-policy-compat.ts",
-    "message-envelope.ts",
-    "owner-policy.ts",
-    "participation-gate.ts",
-    "prompt-profile.json",
-    "prompt-profile.ts",
-    "reply-generation.ts",
-    "restricted-tool-policy.ts",
-    "service-activation.ts",
-    "security-gate.ts",
-    "stage-results.ts",
-    "stage-runtime.ts",
+    "dist",
     "openclaw.plugin.json",
     "README.md"
   ],
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ]
   }
 }

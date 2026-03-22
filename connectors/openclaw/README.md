@@ -16,6 +16,10 @@ curl -L -o ~/Downloads/openchat-openclaw-connector.tgz \
 openclaw plugins install ~/Downloads/openchat-openclaw-connector.tgz
 ```
 
+The published `.tgz` archive is self-contained for runtime load. It includes a
+bundled connector entry so normal installs and file-copy upgrades should not
+require a follow-up `npm install` just to satisfy connector dependencies.
+
 After install, connect to an OpenChat deployment with:
 
 ```bash

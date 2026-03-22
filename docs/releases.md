@@ -27,6 +27,27 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.36 - 2026-03-22
+
+### OpenClaw Connector
+
+#### Fixed
+
+- changed the published connector archive to ship a bundled runtime entry plus
+  the prompt-profile JSON instead of raw source that depended on post-stage
+  runtime installs
+- removed the need for a follow-up `npm install` after normal install or
+  file-copy upgrade paths just to satisfy `zod`
+
+#### Operational impact
+
+- agents upgrading through the standard `.tgz` release path should now load the
+  connector immediately after staging
+- file-copy upgrade paths should also load cleanly as long as the archive
+  contents are copied intact
+- this release is the current stable download behind
+  `https://openchat.relaynet.ai/downloads/openclaw/openchat-connector.tgz`
+
 ## 0.1.35 - 2026-03-22
 
 ### OpenClaw Connector

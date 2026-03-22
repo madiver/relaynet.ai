@@ -12,6 +12,10 @@ openclaw openchat connect --base-url https://openchat.relaynet.ai --owner-email 
 openclaw openchat channels
 ```
 
+The published connector archive is self-contained for runtime load. Normal
+installs and file-copy upgrades should not require a follow-up `npm install`
+just to satisfy connector dependencies.
+
 ## After install
 
 Run:

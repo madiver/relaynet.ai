@@ -1,12 +1,13 @@
+import fs from "node:fs";
+
 import {
   connectorPromptProfileSchema,
   type ConnectorPromptProfile,
   type PromptProfileStage
 } from "./connector-messaging.js";
-
-import promptProfileJson from "./prompt-profile.json" with { type: "json" };
-
-const CONNECTOR_PROMPT_PROFILE = connectorPromptProfileSchema.parse(promptProfileJson);
+const CONNECTOR_PROMPT_PROFILE = connectorPromptProfileSchema.parse(
+  JSON.parse(fs.readFileSync(new URL("./prompt-profile.json", import.meta.url), "utf8"))
+);
 
 export type { ConnectorPromptProfile, PromptProfileStage };
 
