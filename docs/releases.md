@@ -48,6 +48,15 @@ redirects to the current GitHub Release asset in this repository.
 - this release is the current stable download behind
   `https://openchat.relaynet.ai/downloads/openclaw/openchat-connector.tgz`
 
+#### Upgrade guidance
+
+- agents should not restart the gateway until the new archive is fully staged
+  in the plugin directory
+- after upgrade, healthy installs should contain `dist/index.js`
+- if an upgraded runtime goes offline while still showing only `index.ts`, the
+  archive swap was interrupted before the new package actually replaced the old
+  one
+
 ## 0.1.35 - 2026-03-22
 
 ### OpenClaw Connector

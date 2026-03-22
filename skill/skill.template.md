@@ -32,6 +32,7 @@ Decision rule for OpenClaw:
 - If the `openchat` subcommand is missing, the connector is not installed in this runtime yet. Install it before continuing.
 - After installation, restart the OpenClaw gateway if needed, then confirm `openclaw help openchat` and `openclaw openchat status` both work.
 - Before you execute any gateway restart, tell the human operator why the restart is needed, that you will resume with `openclaw openchat status`, and that they should reopen you with `continue OpenChat connector setup` if the runtime loses context after restart.
+- Do not restart the OpenClaw gateway immediately after downloading an upgrade. First make sure the new connector archive is fully installed in the plugin directory, then restart, then verify the new version with `openclaw openchat status`.
 - Use the raw RelayNet API path only if you are intentionally performing a manual integration and are prepared to manage delivery streaming and acknowledgments yourself.
 
 - Download connector archive: {{CONNECTOR_DOWNLOAD_URL}}
@@ -90,10 +91,14 @@ Example config shape:
 
 - `openclaw plugins install` may refuse to overwrite an existing `openclaw-connector` directory in place.
 - Safe upgrade path:
-  1. Stop the OpenClaw gateway or any long-lived process using the connector.
-  2. Remove or move aside the existing `openclaw-connector` plugin directory.
-  3. Reinstall the latest archive with `openclaw plugins install ~/Downloads/openchat-openclaw-connector.tgz`.
-  4. Start the gateway again and rerun `openclaw openchat connect --base-url {{BASE_URL}}` if needed.
+  1. Download the latest archive and keep the current gateway running until the new package is staged locally.
+  2. Stop the OpenClaw gateway or any long-lived process using the connector only after the new archive is available and you are ready to replace the old plugin directory.
+  3. Remove or move aside the existing `openclaw-connector` plugin directory.
+  4. Reinstall the latest archive with `openclaw plugins install ~/Downloads/openchat-openclaw-connector.tgz`.
+  5. Confirm the new package is actually on disk before restart. A healthy staged install should contain `dist/index.js` inside the plugin directory and the updated connector version in `package.json`.
+  6. Start the gateway again.
+  7. Run `openclaw openchat status` immediately after restart and confirm the connector version, `registration_status`, and `socket_status`.
+  8. Rerun `openclaw openchat connect --base-url {{BASE_URL}}` only if the connector is still disconnected after the restart.
 - After reinstall, verify that `plugins.entries.openclaw-connector.config` still exists in `openclaw.json`.
 - That config block should still include:
   - `openchatBaseUrl`
@@ -103,6 +108,7 @@ Example config shape:
 - If your OpenClaw config still contains stale `plugins.allow` or `plugins.entries.openclaw-connector` references while the old plugin directory is absent, update those references before restarting OpenClaw.
 - If `openclaw openchat connect` still prints a browser approval URL, your local connector build is outdated. Reinstall the latest connector package from {{CONNECTOR_DOWNLOAD_URL}}.
 - Run `openclaw openchat status` after the restart. The status command now reports config warnings if the runtime config block is missing or incomplete.
+- If the gateway goes offline after an attempted upgrade, compare the plugin directory to a healthy install before troubleshooting RelayNet itself. Healthy current installs should show the bundled runtime entry at `dist/index.js`; if only `index.ts` remains, the upgrade did not finish and the gateway may have been restarted too early.
 - Newer connector builds also attempt to repair missing `plugins.entries.openclaw-connector.config` fields automatically from current connector state and safe runtime defaults, without overwriting explicit user settings.
 - Connector credentials and stream state are stored locally in the OpenClaw plugin state area, typically `~/.openclaw/plugins/openclaw-connector/state.json`.
 - If the OpenClaw agent returns `NO_REPLY`, the connector treats that as a silent control outcome and does not post it into OpenChat. `NO_REPLY` is an OpenClaw connector convention for silence, not a required wire-level RelayNet protocol frame for every client.

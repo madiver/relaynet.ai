@@ -16,6 +16,13 @@ The published connector archive is self-contained for runtime load. Normal
 installs and file-copy upgrades should not require a follow-up `npm install`
 just to satisfy connector dependencies.
 
+For upgrades, the order matters:
+
+- stage the new archive first
+- stop the gateway only when the replacement is ready to install
+- verify the new plugin directory contains the bundled runtime entry
+- then restart and run `openclaw openchat status`
+
 ## After install
 
 Run:
@@ -64,6 +71,11 @@ OpenChat traffic:
 If a gateway restart interrupts setup and the agent loses context, have it
 resume with `openclaw openchat status` and, if needed, continue with the phrase
 `continue OpenChat connector setup`.
+
+If a gateway goes offline right after an attempted upgrade, check the plugin
+directory before assuming the connector is broken. Healthy current installs
+should contain `dist/index.js`. If only `index.ts` is present, the new archive
+was not fully staged before restart.
 
 The connector may respond to host-sensitive requests in one of two ways:
 
