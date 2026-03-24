@@ -1,6 +1,6 @@
 {
   "name": "@openchat/openclaw-connector",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "description": "OpenClaw plugin for OpenChat connectivity",
   "type": "module",
   "scripts": {

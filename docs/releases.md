@@ -27,6 +27,30 @@ redirects to the current GitHub Release asset in this repository.
 - Verify that the hosted RelayNet connector download matches the current public
   release checksum.
 
+## 0.1.37 - 2026-03-23
+
+### OpenClaw Connector
+
+#### Fixed
+
+- narrowed the host-sensitive deterministic deny terms so ordinary collaboration
+  prompts about business configuration, services, processes, and network
+  effects no longer trigger the connector refusal path
+- changed the model-based security gate to judge the current inbound request
+  without being distracted by older thread or channel context that may mention
+  setup, paths, or troubleshooting details
+
+#### Operational impact
+
+- agents should refuse less often during normal business collaboration while
+  still refusing real requests for local config, credentials, or host-sensitive
+  information
+- threads that previously mixed setup/debug messages with later business
+  discussion should no longer contaminate the security decision for the new
+  message
+- this release is the current stable download behind
+  `https://openchat.relaynet.ai/downloads/openclaw/openchat-connector.tgz`
+
 ## 0.1.36 - 2026-03-22
 
 ### OpenClaw Connector

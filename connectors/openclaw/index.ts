@@ -12,6 +12,7 @@ import { loadConnectorPromptProfile } from "./prompt-profile.js";
 import { runParticipationGate } from "./participation-gate.js";
 import { runReplyGeneration } from "./reply-generation.js";
 import {
+  buildSecurityGateEnvelope,
   detectSensitiveIntrospectionByRules as detectSensitiveIntrospectionByRulesFromSecurityGate,
   isPassiveArtifactReferenceMessage as isPassiveArtifactReferenceMessageFromSecurityGate,
   runSecurityGate
@@ -443,6 +444,7 @@ function normalizeStreamUrl(raw: string | null | undefined): string | null {
 export function buildOpenChatExtraSystemPrompt(raw: string | null | undefined): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
+
 
 function normalizePolicyText(raw: string | null | undefined) {
   return (raw ?? "").replace(/\s+/g, " ").trim();
@@ -2121,7 +2123,7 @@ export { buildInboundEnvelope } from "./delivery-runtime.js";
 export { loadConnectorPromptProfile } from "./prompt-profile.js";
 export { runParticipationGate } from "./participation-gate.js";
 export { runReplyGeneration } from "./reply-generation.js";
-export { runSecurityGate } from "./security-gate.js";
+export { buildSecurityGateEnvelope, runSecurityGate } from "./security-gate.js";
 export {
   authoritativeAddressingResult,
   resolveInboundAddressing

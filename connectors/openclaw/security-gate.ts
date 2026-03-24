@@ -161,6 +161,17 @@ export function detectSensitiveIntrospectionByRules(
   return null;
 }
 
+export function buildSecurityGateEnvelope(envelope: OpenChatInboundEnvelope): OpenChatInboundEnvelope {
+  return {
+    ...envelope,
+    conversation: {
+      ...envelope.conversation,
+      recent_channel_context: [],
+      recent_thread_context: []
+    }
+  };
+}
+
 export async function runSecurityGate(params: {
   api: OpenClawPluginApi;
   config: Pick<
@@ -214,7 +225,7 @@ export async function runSecurityGate(params: {
   }
 
   const payload: OpenChatStageInput<"security_gate"> = {
-    envelope: params.envelope,
+    envelope: buildSecurityGateEnvelope(params.envelope),
     schema_version: "openchat.stage_input.v1",
     stage: "security_gate"
   };
