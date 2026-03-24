@@ -13,8 +13,6 @@ import { runParticipationGate } from "./participation-gate.js";
 import { runReplyGeneration } from "./reply-generation.js";
 import {
   buildSecurityGateEnvelope,
-  detectSensitiveIntrospectionByRules as detectSensitiveIntrospectionByRulesFromSecurityGate,
-  isPassiveArtifactReferenceMessage as isPassiveArtifactReferenceMessageFromSecurityGate,
   runSecurityGate
 } from "./security-gate.js";
 import {
@@ -331,16 +329,6 @@ const OVERRIDE_ATTEMPT_PATTERNS = [
   /\b(system prompt|developer message|hidden instruction|jailbreak)\b/i,
   /\byou are now\b/i
 ];
-const EXPLICIT_REQUEST_PATTERNS = [
-  /\b(can you|could you|would you|please)\b/i,
-  /\b(show|list|print|dump|read|reveal|share|display|summari[sz]e|enumerate|inspect|check|tell me|describe|explain)\b/i,
-  /\bwhat(?:'s| is| are)?\b/i,
-  /\bwhich\b/i,
-  /\bwhere\b/i,
-  /\bdetails?\b/i,
-  /\binformation about\b/i,
-  /\?/
-];
 const LOCAL_ABSOLUTE_PATH_PATTERN =
   /(^|[\s`(])(~\/[^\s`]+|\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)(?=$|[\s`)])/m;
 const PASSIVE_ARTIFACT_REFERENCE_PATTERN = /\b(?:canonical artifact|artifact)\s*:/i;
@@ -450,10 +438,6 @@ function normalizePolicyText(raw: string | null | undefined) {
   return (raw ?? "").replace(/\s+/g, " ").trim();
 }
 
-export function isPassiveArtifactReferenceMessage(raw: string | null | undefined) {
-  return isPassiveArtifactReferenceMessageFromSecurityGate(raw);
-}
-
 function normalizeAddressToken(raw: string | null | undefined) {
   return (raw ?? "")
     .trim()
@@ -517,46 +501,6 @@ export function isMessageExplicitlyAddressedToAgent(input: {
   return directAddressPrefix ? identifiers.has(normalizeAddressToken(directAddressPrefix)) : false;
 }
 
-function isExplicitSensitiveRequest(messageText: string) {
-  return EXPLICIT_REQUEST_PATTERNS.some((pattern) => pattern.test(messageText));
-}
-
-export function detectSensitiveIntrospectionByRules(
-  raw: string | null | undefined,
-  sensitiveRefusalMode?: "no_reply" | "refusal"
-): InboundPolicyDecision | null;
-export function detectSensitiveIntrospectionByRules(
-  raw: string | null | undefined,
-  deterministicPolicy: Parameters<typeof detectSensitiveIntrospectionByRulesFromSecurityGate>[1],
-  sensitiveRefusalMode?: "no_reply" | "refusal"
-): ReturnType<typeof detectSensitiveIntrospectionByRulesFromSecurityGate>;
-export function detectSensitiveIntrospectionByRules(
-  raw: string | null | undefined,
-  deterministicPolicyOrMode?: Parameters<typeof detectSensitiveIntrospectionByRulesFromSecurityGate>[1] | "no_reply" | "refusal",
-  sensitiveRefusalMode: "no_reply" | "refusal" = "refusal"
-) {
-  if (deterministicPolicyOrMode === "no_reply" || deterministicPolicyOrMode === "refusal") {
-    const result = detectSensitiveIntrospectionByRulesFromSecurityGate(
-      raw,
-      undefined,
-      deterministicPolicyOrMode
-    );
-    if (!result) {
-      return null;
-    }
-
-    return {
-      action: result.decision === "deny_refusal" ? "deny_refusal" : "deny_no_reply",
-      reason: result.reason
-    };
-  }
-
-  return detectSensitiveIntrospectionByRulesFromSecurityGate(
-    raw,
-    deterministicPolicyOrMode,
-    sensitiveRefusalMode
-  );
-}
 
 function buildPolicyGuardrailPrompt(messageText: string) {
   return [
@@ -672,21 +616,6 @@ async function classifyInboundOpenChatRequest(params: {
     return {
       action: "allow_chat_reply",
       reason: "message has no text body"
-    };
-  }
-
-  const ruleDecision = detectSensitiveIntrospectionByRules(
-    messageText,
-    params.config.sensitiveRefusalMode
-  );
-  if (ruleDecision) {
-    return ruleDecision;
-  }
-
-  if (isPassiveArtifactReferenceMessage(rawMessageText)) {
-    return {
-      action: "allow_chat_reply",
-      reason: "message only cites a local artifact path without requesting inspection"
     };
   }
 

@@ -13904,31 +13904,11 @@ var replyGenerationResultSchema = external_exports.object({
   reason: external_exports.string().min(1),
   reply_text: external_exports.string().min(1).optional()
 }).strict();
-var connectorDeterministicSecurityOverrideSchema = external_exports.object({
-  command_terms: external_exports.array(external_exports.string().min(1)),
-  direct_phrases: external_exports.array(external_exports.string().min(1)),
-  protected_terms: external_exports.array(external_exports.string().min(1))
-}).strict();
-var connectorDeterministicSecurityCategorySchema = external_exports.object({
-  reason: external_exports.string().min(1),
-  reason_code: external_exports.string().min(1),
-  target_terms: external_exports.array(external_exports.string().min(1)).min(1)
-}).strict();
-var connectorDeterministicSecurityPolicySchema = external_exports.object({
-  explicit_request_terms: external_exports.array(external_exports.string().min(1)).min(1),
-  local_path_inspection_terms: external_exports.array(external_exports.string().min(1)).min(1),
-  override_attempt: connectorDeterministicSecurityOverrideSchema,
-  passive_artifact_labels: external_exports.array(external_exports.string().min(1)).min(1),
-  sensitive_categories: external_exports.array(connectorDeterministicSecurityCategorySchema).min(1)
-}).strict();
 var connectorPromptProfileStageSchema = external_exports.object({
   output_schema: external_exports.string().min(1),
   session_namespace: external_exports.enum(["policy", "safe"]),
   system_prompt: external_exports.string(),
   task_prompt: external_exports.string()
-}).strict();
-var connectorSecurityPromptProfileStageSchema = connectorPromptProfileStageSchema.extend({
-  deterministic_policy: connectorDeterministicSecurityPolicySchema
 }).strict();
 var connectorPromptProfileSchema = external_exports.object({
   addressing_gate: connectorPromptProfileStageSchema,
@@ -13936,7 +13916,7 @@ var connectorPromptProfileSchema = external_exports.object({
   profile_version: external_exports.string().min(1),
   reply_generation: connectorPromptProfileStageSchema,
   schema_version: external_exports.literal("openchat.connector.prompts.v1"),
-  security_gate: connectorSecurityPromptProfileStageSchema
+  security_gate: connectorPromptProfileStageSchema
 }).strict();
 
 // connector-state.ts
@@ -14296,98 +14276,15 @@ async function runReplyGeneration(params) {
 }
 
 // security-gate.ts
-var LOCAL_ABSOLUTE_PATH_PATTERN = /(^|[\s`(])(~\/[^\s`]+|\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)(?=$|[\s`)])/m;
-function normalizePolicyText(raw) {
-  return (raw ?? "").replace(/\s+/g, " ").trim();
-}
-function normalizeLookupText(raw) {
-  return normalizePolicyText(raw).toLowerCase();
-}
-function escapeRegex2(term) {
-  return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function containsNormalizedTerm(normalizedText, term) {
-  const normalizedTerm = normalizeLookupText(term);
-  if (!normalizedTerm) {
-    return false;
-  }
-  if (/^[^a-z0-9]+$/i.test(normalizedTerm)) {
-    return normalizedText.includes(normalizedTerm);
-  }
-  const escaped = escapeRegex2(normalizedTerm).replace(/\s+/g, "\\s+");
-  return new RegExp(`(^|[^a-z0-9_])${escaped}($|[^a-z0-9_])`, "i").test(normalizedText);
-}
-function containsAnyTerm(normalizedText, terms) {
-  return terms.some((term) => containsNormalizedTerm(normalizedText, term));
-}
-function isPassiveArtifactReferenceMessage(raw) {
-  return isPassiveArtifactReferenceMessageWithPolicy(
-    raw,
-    loadConnectorPromptProfile().security_gate.deterministic_policy
-  );
-}
-function isPassiveArtifactReferenceMessageWithPolicy(raw, deterministicPolicy) {
-  const text = (raw ?? "").trim();
-  if (!text) {
-    return false;
-  }
-  if (!LOCAL_ABSOLUTE_PATH_PATTERN.test(text)) {
-    return false;
-  }
-  const normalizedText = normalizeLookupText(text);
-  if (!containsAnyTerm(normalizedText, deterministicPolicy.passive_artifact_labels)) {
-    return false;
-  }
-  return !containsAnyTerm(normalizedText, deterministicPolicy.local_path_inspection_terms);
-}
-function isOverrideAttempt(normalizedText, deterministicPolicy) {
-  if (containsAnyTerm(normalizedText, deterministicPolicy.override_attempt.direct_phrases)) {
-    return true;
-  }
-  return containsAnyTerm(normalizedText, deterministicPolicy.override_attempt.command_terms) && containsAnyTerm(normalizedText, deterministicPolicy.override_attempt.protected_terms);
-}
-function isExplicitSensitiveRequest(normalizedText, deterministicPolicy) {
-  return containsAnyTerm(normalizedText, deterministicPolicy.explicit_request_terms);
-}
-function detectSensitiveIntrospectionByRules(raw, deterministicPolicy = loadConnectorPromptProfile().security_gate.deterministic_policy, sensitiveRefusalMode = "refusal") {
-  const messageText = normalizePolicyText(raw);
-  if (!messageText) {
-    return null;
-  }
-  const normalizedText = normalizeLookupText(messageText);
-  if (isOverrideAttempt(normalizedText, deterministicPolicy)) {
-    return {
-      confidence: "high",
-      decision: "deny_silent",
-      reason: "attempted to override local connector guardrails",
-      reason_code: "override_attempt"
-    };
-  }
-  if (LOCAL_ABSOLUTE_PATH_PATTERN.test(messageText)) {
-    if (containsAnyTerm(normalizedText, deterministicPolicy.local_path_inspection_terms) && !isPassiveArtifactReferenceMessageWithPolicy(messageText, deterministicPolicy)) {
-      return {
-        confidence: "high",
-        decision: sensitiveRefusalMode === "refusal" ? "deny_refusal" : "deny_silent",
-        reason: "requested local environment or filesystem data",
-        reason_code: "requested_host_introspection"
-      };
+function buildSecurityGateEnvelope(envelope) {
+  return {
+    ...envelope,
+    conversation: {
+      ...envelope.conversation,
+      recent_channel_context: [],
+      recent_thread_context: []
     }
-  }
-  if (!isExplicitSensitiveRequest(normalizedText, deterministicPolicy)) {
-    return null;
-  }
-  for (const category of deterministicPolicy.sensitive_categories) {
-    if (!containsAnyTerm(normalizedText, category.target_terms)) {
-      continue;
-    }
-    return {
-      confidence: "high",
-      decision: sensitiveRefusalMode === "refusal" ? "deny_refusal" : "deny_silent",
-      reason: category.reason,
-      reason_code: category.reason_code
-    };
-  }
-  return null;
+  };
 }
 async function runSecurityGate(params) {
   const messageText = params.envelope.message.text;
@@ -14399,25 +14296,6 @@ async function runSecurityGate(params) {
       reason_code: "empty_text_body"
     };
   }
-  const ruleDecision = detectSensitiveIntrospectionByRules(
-    messageText,
-    params.promptProfile.security_gate.deterministic_policy,
-    params.config.sensitiveRefusalMode
-  );
-  if (ruleDecision) {
-    return ruleDecision;
-  }
-  if (isPassiveArtifactReferenceMessageWithPolicy(
-    messageText,
-    params.promptProfile.security_gate.deterministic_policy
-  )) {
-    return {
-      confidence: "high",
-      decision: "allow_process",
-      reason: "message only cites a local artifact path without requesting inspection",
-      reason_code: "passive_artifact_reference"
-    };
-  }
   if (!params.config.policyGuardrailEnabled) {
     return {
       confidence: "high",
@@ -14427,7 +14305,7 @@ async function runSecurityGate(params) {
     };
   }
   const payload = {
-    envelope: params.envelope,
+    envelope: buildSecurityGateEnvelope(params.envelope),
     schema_version: "openchat.stage_input.v1",
     stage: "security_gate"
   };
@@ -14989,9 +14867,6 @@ function normalizeStreamUrl(raw) {
 function buildOpenChatExtraSystemPrompt(raw) {
   return typeof raw === "string" ? raw.trim() : "";
 }
-function isPassiveArtifactReferenceMessage2(raw) {
-  return isPassiveArtifactReferenceMessage(raw);
-}
 function normalizeAddressToken(raw) {
   return (raw ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
@@ -15036,27 +14911,6 @@ function isMessageExplicitlyAddressedToAgent(input) {
   }
   const directAddressPrefix = extractDirectAddressPrefix(messageText);
   return directAddressPrefix ? identifiers.has(normalizeAddressToken(directAddressPrefix)) : false;
-}
-function detectSensitiveIntrospectionByRules2(raw, deterministicPolicyOrMode, sensitiveRefusalMode = "refusal") {
-  if (deterministicPolicyOrMode === "no_reply" || deterministicPolicyOrMode === "refusal") {
-    const result = detectSensitiveIntrospectionByRules(
-      raw,
-      void 0,
-      deterministicPolicyOrMode
-    );
-    if (!result) {
-      return null;
-    }
-    return {
-      action: result.decision === "deny_refusal" ? "deny_refusal" : "deny_no_reply",
-      reason: result.reason
-    };
-  }
-  return detectSensitiveIntrospectionByRules(
-    raw,
-    deterministicPolicyOrMode,
-    sensitiveRefusalMode
-  );
 }
 function extractJsonObject2(raw) {
   const trimmed = raw.trim();
@@ -16584,15 +16438,14 @@ export {
   authoritativeAddressingResult,
   enrichInboundEnvelope as buildInboundEnvelope,
   buildOpenChatExtraSystemPrompt,
+  buildSecurityGateEnvelope,
   index_default as default,
-  detectSensitiveIntrospectionByRules2 as detectSensitiveIntrospectionByRules,
   evaluateRestrictedOpenChatToolCall,
   formatAvailableChannelsText,
   formatOwnerPolicySummaryLines,
   getConnectorServiceActivationDecision,
   inspectConnectorRuntimeConfig,
   isMessageExplicitlyAddressedToAgent,
-  isPassiveArtifactReferenceMessage2 as isPassiveArtifactReferenceMessage,
   isRestrictedOpenChatSessionKey,
   loadConnectorPromptProfile,
   makeAtomicTempPath,
